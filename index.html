@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Windows 11 Web</title>
+<link rel="stylesheet" href="css/win11.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='2' width='9.5' height='9.5' fill='%230078d4'/%3E%3Crect x='12.5' y='2' width='9.5' height='9.5' fill='%230078d4'/%3E%3Crect x='2' y='12.5' width='9.5' height='9.5' fill='%230078d4'/%3E%3Crect x='12.5' y='12.5' width='9.5' height='9.5' fill='%230078d4'/%3E%3C/svg%3E">
+</head>
+<body>
+  <div id="boot">
+    <div class="boot-logo">
+      <svg viewBox="0 0 24 24" width="90" height="90">
+        <rect x="2" y="2" width="9.5" height="9.5" fill="#0078d4"/>
+        <rect x="12.5" y="2" width="9.5" height="9.5" fill="#0078d4"/>
+        <rect x="2" y="12.5" width="9.5" height="9.5" fill="#0078d4"/>
+        <rect x="12.5" y="12.5" width="9.5" height="9.5" fill="#0078d4"/>
+      </svg>
+      <div class="boot-spinner"><div></div><div></div><div></div><div></div><div></div><div></div></div>
+    </div>
+  </div>
+
+  <div id="desktop">
+    <div id="desktop-icons"></div>
+    <div id="windows-layer"></div>
+    <div id="snap-preview"></div>
+  </div>
+
+  <div id="start-menu" class="shell-flyout">
+    <div class="start-search"><span>🔍</span><input id="start-search-input" type="text" placeholder="Search for apps, settings, and documents" spellcheck="false"></div>
+    <div id="start-body">
+      <div id="start-pinned-section">
+        <div class="start-section-head"><span>Pinned</span><button id="start-all-btn" class="start-pill">All apps <span class="chev">›</span></button></div>
+        <div id="start-pinned" class="start-grid"></div>
+        <div class="start-section-head"><span>Recommended</span></div>
+        <div id="start-recommended"></div>
+      </div>
+      <div id="start-all-section" style="display:none">
+        <div class="start-section-head"><span>All apps</span><button id="start-back-btn" class="start-pill"><span class="chev">‹</span> Back</button></div>
+        <div id="start-all-list"></div>
+      </div>
+      <div id="start-search-section" style="display:none">
+        <div class="start-section-head"><span>Best match</span></div>
+        <div id="start-search-results"></div>
+      </div>
+    </div>
+    <div id="start-footer">
+      <div class="start-user"><div class="start-avatar">S</div><span>Seefood</span></div>
+      <button id="power-btn" title="Power">⏻</button>
+    </div>
+  </div>
+
+  <div id="taskbar">
+    <div id="taskbar-widgets" title="Widgets"><span id="tb-weather">☀️ 72°F</span></div>
+    <div id="taskbar-center"></div>
+    <div id="taskbar-tray">
+      <div id="tray-icons" title="System tray"><span>🛜</span><span>🔊</span><span>🔋</span></div>
+      <div id="tray-clock" title="Date and time"><div id="tray-time"></div><div id="tray-date"></div></div>
+      <div id="show-desktop" title="Show desktop"></div>
+    </div>
+  </div>
+
+  <div id="action-center" class="shell-flyout">
+    <div class="ac-grid">
+      <button class="ac-tile on">🛜<span>Wi-Fi</span></button>
+      <button class="ac-tile on">🔵<span>Bluetooth</span></button>
+      <button class="ac-tile">✈️<span>Airplane</span></button>
+      <button class="ac-tile" id="ac-night">🌙<span>Night light</span></button>
+      <button class="ac-tile" id="ac-theme">🎨<span>Dark mode</span></button>
+      <button class="ac-tile">📍<span>Location</span></button>
+    </div>
+    <div class="ac-slider">☀️ <input type="range" min="30" max="100" value="100" id="ac-brightness"></div>
+    <div class="ac-slider">🔊 <input type="range" min="0" max="100" value="80" id="ac-volume"></div>
+  </div>
+
+  <div id="calendar-flyout" class="shell-flyout">
+    <div id="cal-head"></div>
+    <div id="cal-grid"></div>
+  </div>
+
+  <div id="notif-layer"></div>
+  <div id="context-menu"></div>
+
+  <script src="js/kernel.js"></script>
+  <script src="js/wm.js"></script>
+  <script src="js/apps-core.js"></script>
+  <script src="js/apps-office.js"></script>
+  <script src="js/apps-social.js"></script>
+  <script src="js/apps-store.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
