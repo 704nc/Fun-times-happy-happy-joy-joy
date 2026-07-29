@@ -41,7 +41,7 @@ const Shell = {
     this.iconsEl.innerHTML = items.map(it => {
       if (it.type === 'app') {
         const a = Apps.get(it.id);
-        return `<div class="desk-icon" data-app="${a.id}"><div class="di-glyph">${a.letter ? appTileHTML(a) : a.icon}</div><div class="di-label">${a.name}</div></div>`;
+        return `<div class="desk-icon" data-app="${a.id}"><div class="di-glyph">${appTileHTML(a)}</div><div class="di-label">${a.name}</div></div>`;
       }
       return `<div class="desk-icon" data-file="${Utils.esc(it.name)}"><div class="di-glyph">${fileIcon(it.name, it.node)}</div><div class="di-label">${Utils.esc(it.name)}</div></div>`;
     }).join('');
@@ -59,7 +59,7 @@ const Shell = {
     const btn = (app, wins) => {
       const isActive = focusedWin && wins.includes(focusedWin);
       return `<button class="tb-btn ${wins.length ? 'running' : ''} ${isActive ? 'active-win' : ''}" data-launch="${app.id}" title="${app.name}">
-        <span class="tb-ico">${app.letter ? appTileHTML(app) : app.icon}</span><span class="run-dot"></span></button>`;
+        ${appTileHTML(app)}<span class="run-dot"></span></button>`;
     };
     for (const id of pinned) {
       const app = Apps.get(id);
