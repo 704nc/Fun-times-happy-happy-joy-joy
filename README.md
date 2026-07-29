@@ -18,7 +18,13 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 
 ## What's inside
 
-**Shell** — boot screen, desktop with icons and wallpapers, centered Win11 taskbar, Start menu (pinned grid, All apps, live search over apps *and* your files), action center, calendar flyout, toast notifications, right-click context menus, draggable/resizable windows with edge snapping (drag to top = maximize, left/right = half-snap).
+**Shell** — boot screen, lock screen with startup chime, desktop with icons and wallpapers, centered Win11 taskbar with Copilot, Start menu (pinned grid, All apps, live search over apps *and* your files), action center, calendar flyout, toast notifications, right-click context menus, a working Recycle Bin (delete → restore/empty), and draggable/resizable windows with edge snapping (drag to top = maximize, left/right = half-snap).
+
+**Installable PWA** — a service worker caches everything for offline use, and the manifest makes it installable: "Add to Home Screen" on iOS/Android or the install icon in the address bar on desktop gives you a standalone Windows-11-in-a-window, no browser chrome.
+
+**Touch-friendly** — on touch screens a single tap opens icons and files, and windows open maximized on phone-sized displays.
+
+**Copilot** — the taskbar assistant. It's a proudly local pile of if-statements that can open apps ("open excel"), evaluate math, tell jokes, toggle dark mode, and change your wallpaper.
 
 **Built-in apps — all functional:**
 

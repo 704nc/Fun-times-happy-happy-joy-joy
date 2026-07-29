@@ -2,6 +2,7 @@
 'use strict';
 
 const HOME = 'C:/Users/Seefood';
+const TOUCH = matchMedia('(pointer: coarse)').matches;
 
 /* open a VFS file with the right app */
 function openFile(path) {
@@ -44,7 +45,8 @@ Apps.register({
     const sideDirs = [
       ['🏠', 'Home', HOME], ['🖥️', 'Desktop', HOME + '/Desktop'], ['📄', 'Documents', HOME + '/Documents'],
       ['🖼️', 'Pictures', HOME + '/Pictures'], ['🎵', 'Music', HOME + '/Music'], ['🎬', 'Videos', HOME + '/Videos'],
-      ['⬇️', 'Downloads', HOME + '/Downloads'], ['💽', 'Local Disk (C:)', 'C:']
+      ['⬇️', 'Downloads', HOME + '/Downloads'], ['💽', 'Local Disk (C:)', 'C:'],
+      ['🗑️', 'Recycle Bin', FS.binPath]
     ];
     $('.fx-side').innerHTML = sideDirs.map(([i, n, p]) =>
       `<div class="fx-side-item" data-p="${p}"><span>${i}</span><span>${n}</span></div>`).join('');
@@ -92,20 +94,30 @@ Apps.register({
       FS.write(cwd + '/' + FS.uniqueName(cwd, 'New Text Document', '.txt'), '', 'text/plain');
     });
     const files = $('.fx-files');
+    const inBin = () => cwd === FS.binPath || cwd.startsWith(FS.binPath + '/');
     files.addEventListener('click', e => {
       const it = e.target.closest('.fx-item');
       files.querySelectorAll('.fx-item').forEach(x => x.classList.remove('sel'));
       selected = it ? it.dataset.n : null;
-      if (it) it.classList.add('sel');
+      if (it) {
+        it.classList.add('sel');
+        if (TOUCH && !inBin()) openFile(cwd + '/' + it.dataset.n);
+      }
     });
     files.addEventListener('dblclick', e => {
       const it = e.target.closest('.fx-item');
-      if (it) openFile(cwd + '/' + it.dataset.n);
+      if (it && !inBin()) openFile(cwd + '/' + it.dataset.n);
     });
     files.addEventListener('contextmenu', e => {
       e.preventDefault();
       const it = e.target.closest('.fx-item');
-      if (it) {
+      if (it && inBin()) {
+        Shell.contextMenu(e.clientX, e.clientY, [
+          { label: 'Restore', icon: '↩️', fn: () => FS.restoreFromBin(it.dataset.n) },
+          { sep: true },
+          { label: 'Delete permanently', icon: '❌', fn: () => { if (confirm('Permanently delete "' + it.dataset.n + '"?')) FS.remove(cwd + '/' + it.dataset.n); } }
+        ]);
+      } else if (it) {
         const p = cwd + '/' + it.dataset.n;
         Shell.contextMenu(e.clientX, e.clientY, [
           { label: 'Open', icon: '📂', fn: () => openFile(p) },
@@ -114,7 +126,12 @@ Apps.register({
             if (n) FS.rename(p, n);
           } },
           { sep: true },
-          { label: 'Delete', icon: '🗑️', fn: () => { if (confirm('Delete "' + it.dataset.n + '"?')) FS.remove(p); } }
+          { label: 'Delete', icon: '🗑️', fn: () => FS.recycle(p) }
+        ]);
+      } else if (inBin()) {
+        Shell.contextMenu(e.clientX, e.clientY, [
+          { label: 'Empty Recycle Bin', icon: '🗑️', fn: () => { if (!FS.binCount() || confirm('Permanently delete all items in the Recycle Bin?')) FS.emptyBin(); } },
+          { label: 'Refresh', icon: '🔄', fn: render }
         ]);
       } else {
         Shell.contextMenu(e.clientX, e.clientY, [
@@ -685,6 +702,91 @@ Apps.register({
     $('.eg-reload').addEventListener('click', () => { if (frame.style.display !== 'none') frame.src = frame.src; });
     $('.eg-back').addEventListener('click', () => { if (hIdx > 0) { hIdx--; go(hist[hIdx], true); } else goHome(); });
     $('.eg-fwd').addEventListener('click', () => { if (hIdx < hist.length - 1) { hIdx++; go(hist[hIdx], true); } });
+  }
+});
+
+/* ---------- Copilot ---------- */
+Apps.register({
+  id: 'copilot', name: 'Copilot', icon: '✦', letter: true, color: 'linear-gradient(135deg,#7a5fff,#00b7c3)',
+  category: 'Productivity', width: 440, height: 600, singleton: true,
+  mount(win) {
+    win.body.innerHTML = `
+      <div class="cop-root">
+        <div class="cop-msgs">
+          <div class="cop-msg bot">Hi, I'm Copilot ✦ — your (extremely local) assistant. I can open apps ("open excel"), do math ("512*3+7"), tell a joke, switch dark mode, change the wallpaper, or tell you the time. Try me!</div>
+        </div>
+        <div class="cop-input"><input placeholder="Ask me anything…" spellcheck="false"><button title="Send">➤</button></div>
+      </div>`;
+    const msgs = win.body.querySelector('.cop-msgs');
+    const input = win.body.querySelector('input');
+    const add = (text, who) => {
+      const m = Utils.el('div', 'cop-msg ' + who);
+      m.textContent = text;
+      msgs.appendChild(m);
+      msgs.scrollTop = msgs.scrollHeight;
+      return m;
+    };
+    const JOKES = [
+      'Why do programmers prefer dark mode? Because light attracts bugs.',
+      'I would tell you a UDP joke, but you might not get it.',
+      'There are only 10 kinds of people: those who understand binary and those who don\'t.',
+      'Why was the JavaScript developer sad? Because he didn\'t Node how to Express himself.',
+      'A SQL query walks into a bar, walks up to two tables and asks: "Can I JOIN you?"'
+    ];
+    function respond(q) {
+      const l = q.toLowerCase().trim();
+      // open apps
+      const openM = l.match(/^(?:open|launch|start|run)\s+(.+)$/);
+      if (openM) {
+        const app = Apps.visible().find(a => a.name.toLowerCase().includes(openM[1].trim()) || a.id === openM[1].trim());
+        if (app) { Apps.launch(app.id); return 'Opening ' + app.name + ' for you. 🚀'; }
+        return 'I couldn\'t find an app called "' + openM[1].trim() + '". Check the Microsoft Store — maybe it\'s not installed yet?';
+      }
+      // math
+      const mathQ = q.replace(/,/g, '').replace(/[?=\s]+$/, '');
+      if (/\d/.test(mathQ) && /^[-+*/().\d\s%^]+$/.test(mathQ)) {
+        try {
+          const v = Function('"use strict";return (' + mathQ.replace(/\^/g, '**') + ')')();
+          if (typeof v === 'number' && isFinite(v)) return q.trim() + ' = ' + (Math.round(v * 1e10) / 1e10);
+        } catch (e) {}
+      }
+      if (/joke|funny/.test(l)) return JOKES[Math.floor(Math.random() * JOKES.length)];
+      if (/time|clock/.test(l) && !/spotify/.test(l)) return 'It\'s ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.';
+      if (/date|day is it|today/.test(l)) return 'Today is ' + new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + '.';
+      if (/dark mode|dark theme/.test(l)) { Settings.set('theme', 'dark'); return 'Dark mode on. Easy on the eyes. 🌙'; }
+      if (/light mode|light theme/.test(l)) { Settings.set('theme', 'light'); return 'Light mode on. ☀️'; }
+      if (/wallpaper|background/.test(l)) {
+        const ids = Wallpapers.ids;
+        const next = ids[(ids.indexOf(Settings.get('wallpaper')) + 1) % ids.length];
+        Settings.set('wallpaper', next);
+        return 'Switched the wallpaper to "' + Wallpapers.names[next] + '". 🖼️';
+      }
+      if (/weather/.test(l)) {
+        if (Apps.isInstalled('weather')) { Apps.launch('weather'); return 'Here\'s the forecast for Webville!'; }
+        return 'Install MSN Weather from the Microsoft Store and I\'ll pull up the forecast for you.';
+      }
+      if (/who are you|what are you/.test(l)) return 'I\'m Copilot — well, a homage to it. I live entirely in this browser tab and I\'m powered by a handful of if-statements doing their absolute best.';
+      if (/help|what can you/.test(l)) return 'I can: open apps ("open paint"), calculate ("(84/2)*3"), tell jokes, toggle dark/light mode, change the wallpaper, show the weather, and tell you the time or date.';
+      if (/thank/.test(l)) return 'Anytime! 💜';
+      if (/^(hi|hello|hey|yo)\b/.test(l)) return 'Hey there! What can I do for you?';
+      const fallback = [
+        'Interesting! I\'m a small local script though — try "help" to see what I can actually do.',
+        'Hmm, that\'s beyond my (very finite) powers. Type "help" for my full repertoire.',
+        'My neural network is literally a switch statement, but I CAN open apps, do math, and tell jokes. "help" for more.'
+      ];
+      return fallback[Math.floor(Math.random() * fallback.length)];
+    }
+    function send() {
+      const q = input.value.trim();
+      if (!q) return;
+      input.value = '';
+      add(q, 'me');
+      const thinking = add('…', 'bot');
+      setTimeout(() => { thinking.textContent = respond(q); msgs.scrollTop = msgs.scrollHeight; }, 450 + Math.random() * 500);
+    }
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    win.body.querySelector('.cop-input button').addEventListener('click', send);
+    setTimeout(() => input.focus(), 150);
   }
 });
 

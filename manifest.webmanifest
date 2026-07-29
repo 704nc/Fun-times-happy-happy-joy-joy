@@ -1,0 +1,16 @@
+{
+  "name": "Windows 11 Web",
+  "short_name": "Win11 Web",
+  "description": "A browser-friendly Windows 11 replica with working apps — Office, Store, Spotify, Slack, games and more.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a1e52",
+  "theme_color": "#0078d4",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

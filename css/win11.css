@@ -61,6 +61,31 @@ input, textarea, select { font-family: inherit; }
 .boot-spinner div:nth-child(5){transform:rotate(120deg)} .boot-spinner div:nth-child(6){transform:rotate(150deg)}
 @keyframes bspin { from { transform: rotate(0) } to { transform: rotate(360deg) } }
 
+/* ============ Lock screen ============ */
+#lockscreen {
+  position: fixed; inset: 0; z-index: 9800;
+  background-size: cover; background-position: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.55); cursor: default;
+  transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s;
+}
+#lockscreen.unlocking { transform: translateY(-100%); opacity: 0; }
+#lockscreen .lock-time { font-size: 88px; font-weight: 300; line-height: 1; letter-spacing: -2px; }
+#lockscreen .lock-date { font-size: 22px; margin-top: 12px; font-weight: 400; }
+#lockscreen .lock-hint { position: absolute; bottom: 48px; font-size: 13px; opacity: .85; animation: lock-pulse 2.4s ease-in-out infinite; }
+@keyframes lock-pulse { 0%,100% { opacity: .5 } 50% { opacity: .95 } }
+
+/* ============ Copilot ============ */
+.cop-root { display: flex; flex-direction: column; height: 100%; background: linear-gradient(180deg, rgba(122,95,255,.09), transparent 140px); }
+.cop-msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.cop-msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; user-select: text; }
+.cop-msg.bot { background: var(--card-solid); border: 1px solid var(--stroke); border-bottom-left-radius: 4px; align-self: flex-start; }
+.cop-msg.me { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; align-self: flex-end; }
+.cop-input { flex: none; display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--stroke); }
+.cop-input input { flex: 1; border: 1px solid var(--stroke); border-radius: 18px; background: var(--card-solid); color: var(--text); padding: 9px 16px; font-size: 13px; outline: none; }
+.cop-input input:focus { border-color: var(--accent); }
+.cop-input button { border: none; background: var(--accent); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 14px; cursor: default; }
+
 /* ============ Desktop ============ */
 #desktop {
   position: fixed; inset: 0; bottom: var(--taskbar-h);
@@ -634,4 +659,6 @@ html.dark .sticky-note-area { background: #665c1e; color: #fff; }
   #tray-icons span:not(:last-child) { display: none; }
   .tb-btn { width: 34px; }
   .tb-btn .app-tile, .tb-btn .tb-ico { width: 24px; height: 24px; }
+  #lockscreen .lock-time { font-size: 56px; }
+  #lockscreen .lock-date { font-size: 16px; }
 }

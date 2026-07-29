@@ -164,6 +164,8 @@ const WM = {
     this._drag(win, tb);
     this._resize(win);
     win.focus();
+    // phone-sized screens: floating windows are fiddly, open maximized
+    if (window.innerWidth < 700 || window.innerHeight < 480) win.toggleMax();
     return win;
   },
 

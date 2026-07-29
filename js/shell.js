@@ -44,7 +44,7 @@ const Shell = {
         return `<div class="desk-icon" data-app="${a.id}"><div class="di-glyph">${appTileHTML(a)}</div><div class="di-label">${a.name}</div></div>`;
       }
       return `<div class="desk-icon" data-file="${Utils.esc(it.name)}"><div class="di-glyph">${fileIcon(it.name, it.node)}</div><div class="di-label">${Utils.esc(it.name)}</div></div>`;
-    }).join('');
+    }).join('') + `<div class="desk-icon" data-sys="recycle"><div class="di-glyph">🗑️</div><div class="di-label">Recycle Bin${FS.binCount() ? ' (' + FS.binCount() + ')' : ''}</div></div>`;
   },
 
   /* ----- taskbar ----- */
@@ -55,7 +55,9 @@ const Shell = {
     const shown = new Set();
     let html = `
       <button class="tb-btn" data-act="start" title="Start"><span class="tb-ico"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="3" width="8.5" height="8.5" rx="1" fill="#0b5cd5"/><rect x="12.5" y="3" width="8.5" height="8.5" rx="1" fill="#0b5cd5"/><rect x="3" y="12.5" width="8.5" height="8.5" rx="1" fill="#0b5cd5"/><rect x="12.5" y="12.5" width="8.5" height="8.5" rx="1" fill="#0b5cd5"/></svg></span></button>
-      <button class="tb-btn" data-act="search" title="Search"><span class="tb-ico">🔍</span></button>`;
+      <button class="tb-btn" data-act="search" title="Search"><span class="tb-ico">🔍</span></button>
+      <button class="tb-btn ${WM.byApp('copilot').length ? 'running' : ''}" data-launch="copilot" title="Copilot">${appTileHTML(Apps.get('copilot'))}<span class="run-dot"></span></button>`;
+    shown.add('copilot');
     const btn = (app, wins) => {
       const isActive = focusedWin && wins.includes(focusedWin);
       return `<button class="tb-btn ${wins.length ? 'running' : ''} ${isActive ? 'active-win' : ''}" data-launch="${app.id}" title="${app.name}">
@@ -89,7 +91,7 @@ const Shell = {
   /* ----- start menu ----- */
   renderStart() {
     const visible = Apps.visible();
-    const pinnedIds = ['edge', 'word', 'excel', 'powerpoint', 'store', 'photos', 'settings', 'explorer', 'spotify', 'slack', 'discord', 'mediaplayer', 'notepad', 'paint', 'calculator', 'terminal'];
+    const pinnedIds = ['edge', 'word', 'excel', 'powerpoint', 'store', 'photos', 'settings', 'explorer', 'copilot', 'spotify', 'slack', 'discord', 'mediaplayer', 'notepad', 'paint', 'calculator', 'terminal'];
     const pinned = pinnedIds.map(id => Apps.get(id)).filter(a => a && Apps.isInstalled(a.id));
     const extra = visible.filter(a => !pinnedIds.includes(a.id));
     document.getElementById('start-pinned').innerHTML = pinned.concat(extra).slice(0, 18).map(a =>
@@ -263,13 +265,19 @@ const Shell = {
         const items = [{ label: 'Open', icon: '📂', fn: () => Apps.launch(app.id) }];
         if (app.store) items.push({ sep: true }, { label: 'Uninstall', icon: '🗑️', fn: () => Apps.uninstall(app.id) });
         this.contextMenu(e.clientX, e.clientY, items);
+      } else if (ic.dataset.sys === 'recycle') {
+        this.contextMenu(e.clientX, e.clientY, [
+          { label: 'Open', icon: '📂', fn: () => Apps.launch('explorer', { path: FS.binPath }) },
+          { sep: true },
+          { label: 'Empty Recycle Bin', icon: '❌', fn: () => { if (!FS.binCount() || confirm('Permanently delete all ' + FS.binCount() + ' item(s)?')) FS.emptyBin(); } }
+        ]);
       } else if (ic.dataset.file) {
         const p = HOME + '/Desktop/' + ic.dataset.file;
         this.contextMenu(e.clientX, e.clientY, [
           { label: 'Open', icon: '📂', fn: () => openFile(p) },
           { label: 'Rename', icon: '✏️', fn: () => { const n = prompt('Rename to:', ic.dataset.file); if (n) FS.rename(p, n); } },
           { sep: true },
-          { label: 'Delete', icon: '🗑️', fn: () => FS.remove(p) }
+          { label: 'Delete', icon: '🗑️', fn: () => FS.recycle(p) }
         ]);
       }
     });
@@ -315,16 +323,20 @@ const Shell = {
     document.getElementById('power-btn').addEventListener('click', () => {
       if (confirm('Shut down Windows 11 Web? (This just reloads the page.)')) location.reload();
     });
-    // desktop icons
+    // desktop icons — double-click opens; on touch screens a single tap opens
+    const openIcon = ic => {
+      if (ic.dataset.app) Apps.launch(ic.dataset.app);
+      else if (ic.dataset.sys === 'recycle') Apps.launch('explorer', { path: FS.binPath });
+      else if (ic.dataset.file) openFile(HOME + '/Desktop/' + ic.dataset.file);
+    };
     this.iconsEl.addEventListener('click', e => {
       const ic = e.target.closest('.desk-icon');
       this.iconsEl.querySelectorAll('.desk-icon').forEach(x => x.classList.toggle('sel', x === ic));
+      if (ic && TOUCH) openIcon(ic);
     });
     this.iconsEl.addEventListener('dblclick', e => {
       const ic = e.target.closest('.desk-icon');
-      if (!ic) return;
-      if (ic.dataset.app) Apps.launch(ic.dataset.app);
-      else if (ic.dataset.file) openFile(HOME + '/Desktop/' + ic.dataset.file);
+      if (ic) openIcon(ic);
     });
     // desktop click closes start
     this.desktop.addEventListener('pointerdown', e => {

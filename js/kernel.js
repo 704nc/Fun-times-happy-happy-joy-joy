@@ -106,10 +106,16 @@ const FS = {
   load() {
     try {
       const raw = localStorage.getItem(this._key);
-      if (raw) { this.root = JSON.parse(raw); return; }
+      if (raw) { this.root = JSON.parse(raw); }
     } catch (e) {}
-    this.root = this._defaultTree();
-    this.save();
+    if (!this.root) {
+      this.root = this._defaultTree();
+      this.save();
+    }
+    if (!this.root.children['$Recycle.Bin']) {
+      this.root.children['$Recycle.Bin'] = { type: 'folder', children: {} };
+      this.save();
+    }
   },
   _defaultTree() {
     const pics = { type: 'folder', children: {} };
@@ -216,6 +222,49 @@ const FS = {
     this.save();
     Bus.emit('fs:changed', path);
     return true;
+  },
+  binPath: 'C:/$Recycle.Bin',
+  recycle(path) {
+    const loc = this.parentOf(path);
+    if (!loc || !loc.parent.children[loc.name]) return false;
+    const node = loc.parent.children[loc.name];
+    delete loc.parent.children[loc.name];
+    node.meta = { orig: path };
+    const bin = this.get(this.binPath);
+    bin.children[this.uniqueName(this.binPath, loc.name, '')] = node;
+    this.save();
+    Bus.emit('fs:changed', path);
+    return true;
+  },
+  restoreFromBin(name) {
+    const bin = this.get(this.binPath);
+    const node = bin.children[name];
+    if (!node) return false;
+    let target = (node.meta && node.meta.orig) || null;
+    if (!target || !this.parentOf(target) || !this.parentOf(target).parent) {
+      target = 'C:/Users/Seefood/Desktop/' + name;
+    }
+    const loc = this.parentOf(target);
+    if (loc.parent.children[loc.name]) {
+      const dot = loc.name.lastIndexOf('.');
+      const base = dot > 0 ? loc.name.slice(0, dot) : loc.name;
+      const ext = dot > 0 ? loc.name.slice(dot) : '';
+      loc.name = this.uniqueName(target.slice(0, -loc.name.length - 1) || 'C:', base, ext);
+    }
+    delete node.meta;
+    delete bin.children[name];
+    loc.parent.children[loc.name] = node;
+    this.save();
+    Bus.emit('fs:changed', target);
+    return true;
+  },
+  emptyBin() {
+    this.get(this.binPath).children = {};
+    this.save();
+    Bus.emit('fs:changed', this.binPath);
+  },
+  binCount() {
+    return Object.keys(this.get(this.binPath).children).length;
   },
   uniqueName(dirPath, base, ext) {
     const dir = this.get(dirPath);
@@ -457,6 +506,13 @@ const Synth = (() => {
     },
     setVolume(v) { audioCtx(); master.gain.value = Utils.clamp(v, 0, 1); },
     getVolume() { return master ? master.gain.value : 0.5; },
+    // soft Windows-ish startup chime (must be called from a user gesture)
+    chime() {
+      try {
+        [[64, 0], [59, 130], [61, 260], [66, 420]].forEach(([m, t]) =>
+          setTimeout(() => this.note(m, 1.4, 'sine'), t));
+      } catch (e) {}
+    },
     // one-shot note (piano app)
     note(midi, durS, type) {
       const c = audioCtx();
