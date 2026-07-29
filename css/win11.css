@@ -30,6 +30,16 @@ html.dark {
 }
 html, body { height: 100%; overflow: hidden; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* stop iOS double-tap zoom from eating rapid taps (calculator, games, taskbar) */
+button, input, select, textarea, label,
+.desk-icon, .fx-item, .fx-side-item, .start-app, .start-list-item, .start-rec,
+.tb-btn, .ac-tile, .cm-item, .sp-row, .sp-card, .sp-side-item, .chat-ch, .srv,
+.mp-track, .ph-thumb, .ppt-thumb, .ttt-cell, .mine-cell, .g2048-board,
+.win-controls button, .edge-tile, .wall-opt, .acc-opt, .switch, .set-nav {
+  touch-action: manipulation;
+}
+/* surfaces that own their touches entirely: drawing, playing, window drag/resize */
+.paint-canvas-wrap canvas, .piano-keys, .snake-board, .win-resizer, .win-titlebar { touch-action: none; }
 body {
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   font-size: 14px; color: var(--text);

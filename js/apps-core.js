@@ -224,7 +224,7 @@ Apps.register({
       return b;
     }
     function press(k) {
-      if (/[0-9]/.test(k)) { cur = (fresh || cur === '0') ? k : cur + k; fresh = false; }
+      if (/^[0-9]$/.test(k)) { cur = (fresh || cur === '0') ? k : cur + k; fresh = false; }
       else if (k === '.') { if (fresh) { cur = '0.'; fresh = false; } else if (!cur.includes('.')) cur += '.'; }
       else if (k === 'C') { cur = '0'; prev = null; op = null; fresh = true; exprEl.textContent = ''; }
       else if (k === 'CE') { cur = '0'; fresh = true; }
@@ -246,7 +246,21 @@ Apps.register({
       valEl.textContent = cur;
       valEl.style.fontSize = cur.length > 12 ? '24px' : '40px';
     }
-    grid.addEventListener('click', e => { if (e.target.dataset.k) press(e.target.dataset.k); });
+    grid.addEventListener('click', e => {
+      const b = e.target.closest('button[data-k]');
+      if (b) press(b.dataset.k);
+    });
+    // keyboard input
+    win.body.tabIndex = 0;
+    win.body.addEventListener('keydown', e => {
+      const map = {
+        '/': '÷', '*': '×', '-': '−', '+': '+', '%': '%',
+        Enter: '=', '=': '=', Backspace: '⌫', Delete: 'CE', Escape: 'C', '.': '.'
+      };
+      const k = /^[0-9]$/.test(e.key) ? e.key : map[e.key];
+      if (k !== undefined) { e.preventDefault(); press(k); }
+    });
+    setTimeout(() => win.body.focus(), 100);
   }
 });
 
