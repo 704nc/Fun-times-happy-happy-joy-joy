@@ -119,15 +119,21 @@ Apps.register({
         ]);
       } else if (it) {
         const p = cwd + '/' + it.dataset.n;
-        Shell.contextMenu(e.clientX, e.clientY, [
-          { label: 'Open', icon: '📂', fn: () => openFile(p) },
+        const items = [
+          { label: 'Open', icon: '📂', fn: () => openFile(p) }
+        ];
+        if (/\.(png|jpe?g|svg|gif|bmp|webp)$/i.test(it.dataset.n)) {
+          items.push({ label: 'Edit in Paint', icon: '🎨', fn: () => Apps.launch('paint', { path: p }) });
+        }
+        items.push(
           { label: 'Rename', icon: '✏️', fn: () => {
             const n = prompt('Rename to:', it.dataset.n);
             if (n) FS.rename(p, n);
           } },
           { sep: true },
           { label: 'Delete', icon: '🗑️', fn: () => FS.recycle(p) }
-        ]);
+        );
+        Shell.contextMenu(e.clientX, e.clientY, items);
       } else if (inBin()) {
         Shell.contextMenu(e.clientX, e.clientY, [
           { label: 'Empty Recycle Bin', icon: '🗑️', fn: () => { if (!FS.binCount() || confirm('Permanently delete all items in the Recycle Bin?')) FS.emptyBin(); } },
@@ -373,39 +379,171 @@ Apps.register({
 /* ---------- Paint ---------- */
 Apps.register({
   id: 'paint', name: 'Paint', icon: '🎨', color: 'linear-gradient(135deg,#ffb2c8,#e2486d)',
-  category: 'Creativity', width: 820, height: 560,
-  mount(win) {
+  category: 'Creativity', width: 980, height: 660,
+  mount(win, args) {
+    const TOOLS = [
+      ['brush', '🖌️', 'Brush (B)'], ['pencil', '✏️', 'Pencil (P)'], ['marker', '🖍️', 'Marker (M)'],
+      ['spray', '💨', 'Spray (A)'], ['eraser', '🧽', 'Eraser (E)'], ['fill', '🪣', 'Fill (F)'],
+      ['picker', '💧', 'Pick color (I)'], ['text', '🅰️', 'Text (T)']
+    ];
+    const SHAPES = [
+      ['line', '╱', 'Line'], ['rect', '▭', 'Rectangle'], ['ellipse', '◯', 'Ellipse'],
+      ['triangle', '△', 'Triangle'], ['arrow', '➔', 'Arrow'], ['star', '★', 'Star']
+    ];
+    const SHAPE_IDS = SHAPES.map(s => s[0]);
+    const PALETTE = ['#000000', '#7f7f7f', '#c3c3c3', '#ffffff', '#880015', '#ed1c24', '#ff7f27', '#fff200', '#22b14c', '#00a2e8', '#3f48cc', '#a349a4', '#ffaec9', '#b97a57'];
     win.body.innerHTML = `
       <div class="app-toolbar">
-        <button class="pt-tool on" data-t="pen">✏️ Pen</button>
-        <button class="pt-tool" data-t="eraser">🧽 Eraser</button>
-        <button class="pt-tool" data-t="line">📏 Line</button>
-        <button class="pt-tool" data-t="rect">▭ Rect</button>
-        <button class="pt-tool" data-t="circle">◯ Circle</button>
-        <button class="pt-tool" data-t="fill">🪣 Fill</button>
+        ${TOOLS.map(([t, i, tip], n) => `<button class="pt-tool ${n === 0 ? 'on' : ''}" data-t="${t}" title="${tip}">${i}</button>`).join('')}
         <div class="sep"></div>
-        <input type="color" class="pt-color" value="#e2486d" title="Color">
-        <select class="pt-size"><option value="2">Thin</option><option value="5" selected>Medium</option><option value="12">Thick</option><option value="24">Marker</option></select>
+        ${SHAPES.map(([t, i, tip]) => `<button class="pt-tool" data-t="${t}" title="${tip}">${i}</button>`).join('')}
+        <select class="pt-fillmode" title="Shape style"><option value="outline">Outline</option><option value="filled">Filled</option><option value="both">Both</option></select>
         <div class="sep"></div>
-        <button class="pt-clear">🗑️ Clear</button>
-        <button class="pt-save">💾 Save to Pictures</button>
+        <button class="pt-undo" title="Undo (Ctrl+Z)">↶</button>
+        <button class="pt-redo" title="Redo (Ctrl+Y)">↷</button>
+        <button class="pt-clear" title="Clear canvas">🗑️</button>
+        <div class="sep"></div>
+        <button class="pt-open" title="Open image">📂</button>
+        <button class="pt-save" title="Save to Pictures (Ctrl+S)">💾</button>
+        <button class="pt-dl" title="Download as PNG">⬇️</button>
       </div>
-      <div class="paint-canvas-wrap"><canvas width="760" height="440"></canvas></div>`;
-    const cv = win.body.querySelector('canvas');
-    const ctx = cv.getContext('2d');
+      <div class="app-toolbar">
+        <div class="paint-palette">
+          ${PALETTE.map((c, i) => `<div class="pt-swatch ${i === 0 ? 'sel' : ''}" data-c="${c}" style="background:${c}"></div>`).join('')}
+          <input type="color" class="pt-color" value="#000000" title="Custom color">
+        </div>
+        <div class="sep"></div>
+        <span class="paint-lbl">Size</span>
+        <input type="range" class="pt-size" min="1" max="64" value="6" style="width:110px" title="Brush size">
+        <span class="paint-lbl pt-size-val">6px</span>
+        <span class="paint-lbl" style="margin-left:8px">Opacity</span>
+        <input type="range" class="pt-alpha" min="10" max="100" value="100" style="width:90px" title="Opacity">
+      </div>
+      <div class="paint-canvas-wrap"><canvas></canvas><div class="brush-cursor"></div></div>
+      <div class="paint-status"><span class="ps-pos"></span><span class="ps-info"></span></div>
+      <input type="file" accept="image/*" style="display:none">`;
+    const $ = s => win.body.querySelector(s);
+    const cv = $('canvas'), wrap = $('.paint-canvas-wrap'), cursorEl = $('.brush-cursor');
+    const fileInput = $('input[type=file]');
+    // size the canvas to the window it opened in
+    cv.width = Utils.clamp(wrap.clientWidth - 28, 320, 1400);
+    cv.height = Utils.clamp(wrap.clientHeight - 28, 240, 900);
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    let tool = 'pen', drawing = false, sx = 0, sy = 0, snap = null;
-    const color = () => win.body.querySelector('.pt-color').value;
-    const size = () => +win.body.querySelector('.pt-size').value;
-    win.body.querySelectorAll('.pt-tool').forEach(b => b.addEventListener('click', () => {
-      win.body.querySelectorAll('.pt-tool').forEach(x => x.classList.remove('on'));
-      b.classList.add('on'); tool = b.dataset.t;
-    }));
+    $('.ps-info').textContent = cv.width + ' × ' + cv.height + 'px';
+
+    let tool = 'brush', drawing = false, sx = 0, sy = 0, last = null, lastMid = null;
+    let previewSnap = null, sprayTimer = null, sprayPos = null, fileName = null;
+    const color = () => $('.pt-color').value;
+    const size = () => +$('.pt-size').value;
+    const alpha = () => +$('.pt-alpha').value / 100;
+    const fillMode = () => $('.pt-fillmode').value;
+    const isShape = t => SHAPE_IDS.includes(t);
+
+    /* ----- undo / redo (snapshot before each committed action) ----- */
+    const undoStack = [], redoStack = [];
+    const grab = () => ctx.getImageData(0, 0, cv.width, cv.height);
+    function updHistBtns() {
+      $('.pt-undo').style.opacity = undoStack.length ? 1 : 0.35;
+      $('.pt-redo').style.opacity = redoStack.length ? 1 : 0.35;
+    }
+    function snapshot() {
+      undoStack.push(grab());
+      if (undoStack.length > 15) undoStack.shift();
+      redoStack.length = 0;
+      updHistBtns();
+    }
+    function undo() {
+      if (!undoStack.length) return;
+      redoStack.push(grab());
+      ctx.putImageData(undoStack.pop(), 0, 0);
+      updHistBtns();
+    }
+    function redo() {
+      if (!redoStack.length) return;
+      undoStack.push(grab());
+      ctx.putImageData(redoStack.pop(), 0, 0);
+      updHistBtns();
+    }
+    updHistBtns();
+
+    /* ----- tools / colors UI ----- */
+    function selectTool(t) {
+      tool = t;
+      win.body.querySelectorAll('.pt-tool').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    }
+    win.body.querySelectorAll('.pt-tool').forEach(b => b.addEventListener('click', () => selectTool(b.dataset.t)));
+    function setColor(hex) {
+      $('.pt-color').value = hex;
+      win.body.querySelectorAll('.pt-swatch').forEach(s => s.classList.toggle('sel', s.dataset.c === hex));
+    }
+    win.body.querySelectorAll('.pt-swatch').forEach(s => s.addEventListener('click', () => setColor(s.dataset.c)));
+    $('.pt-color').addEventListener('input', () => setColor($('.pt-color').value));
+    $('.pt-size').addEventListener('input', () => $('.pt-size-val').textContent = size() + 'px');
+
+    function applyStyle() {
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.lineWidth = tool === 'pencil' ? 1 : tool === 'eraser' ? size() * 2 : size();
+      ctx.globalAlpha = tool === 'eraser' ? 1 : tool === 'marker' ? Math.min(alpha(), 0.35) : alpha();
+      ctx.strokeStyle = ctx.fillStyle = tool === 'eraser' ? '#ffffff' : color();
+    }
+
+    /* ----- drawing primitives ----- */
     const pos = e => {
       const r = cv.getBoundingClientRect();
       return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)];
     };
+    function dot(x, y) {
+      ctx.beginPath();
+      ctx.arc(x, y, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function drawShape(t, x, y, shift) {
+      if (shift) {
+        if (t === 'line' || t === 'arrow') {
+          const ang = Math.atan2(y - sy, x - sx);
+          const snapAng = Math.round(ang / (Math.PI / 4)) * (Math.PI / 4);
+          const len = Math.hypot(x - sx, y - sy);
+          x = sx + Math.cos(snapAng) * len; y = sy + Math.sin(snapAng) * len;
+        } else {
+          const s = Math.max(Math.abs(x - sx), Math.abs(y - sy));
+          x = sx + Math.sign(x - sx || 1) * s;
+          y = sy + Math.sign(y - sy || 1) * s;
+        }
+      }
+      const mode = fillMode();
+      ctx.beginPath();
+      if (t === 'line') { ctx.moveTo(sx, sy); ctx.lineTo(x, y); ctx.stroke(); return; }
+      if (t === 'arrow') {
+        const ang = Math.atan2(y - sy, x - sx), hd = Math.max(12, ctx.lineWidth * 3);
+        ctx.moveTo(sx, sy); ctx.lineTo(x, y); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - hd * Math.cos(ang - 0.45), y - hd * Math.sin(ang - 0.45));
+        ctx.lineTo(x - hd * Math.cos(ang + 0.45), y - hd * Math.sin(ang + 0.45));
+        ctx.closePath(); ctx.fill();
+        return;
+      }
+      if (t === 'rect') ctx.rect(Math.min(sx, x), Math.min(sy, y), Math.abs(x - sx), Math.abs(y - sy));
+      else if (t === 'ellipse') ctx.ellipse((sx + x) / 2, (sy + y) / 2, Math.abs(x - sx) / 2, Math.abs(y - sy) / 2, 0, 0, Math.PI * 2);
+      else if (t === 'triangle') {
+        ctx.moveTo((sx + x) / 2, Math.min(sy, y));
+        ctx.lineTo(Math.min(sx, x), Math.max(sy, y));
+        ctx.lineTo(Math.max(sx, x), Math.max(sy, y));
+        ctx.closePath();
+      } else if (t === 'star') {
+        const cx = (sx + x) / 2, cy = (sy + y) / 2;
+        const R = Math.max(Math.abs(x - sx), Math.abs(y - sy)) / 2, r = R * 0.42;
+        for (let i = 0; i < 10; i++) {
+          const rad = i % 2 ? r : R, a = -Math.PI / 2 + i * Math.PI / 5;
+          const px = cx + rad * Math.cos(a), py = cy + rad * Math.sin(a);
+          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        }
+        ctx.closePath();
+      }
+      if (mode !== 'outline') ctx.fill();
+      if (mode !== 'filled') ctx.stroke();
+    }
     function floodFill(x, y, hex) {
       const img = ctx.getImageData(0, 0, cv.width, cv.height);
       const d = img.data, W = cv.width, H = cv.height;
@@ -425,39 +563,174 @@ Apps.register({
       }
       ctx.putImageData(img, 0, 0);
     }
+    function stopSpray() {
+      clearInterval(sprayTimer);
+      sprayTimer = null;
+    }
+
+    /* ----- pointer handling ----- */
     cv.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
       e.preventDefault();
       [sx, sy] = pos(e);
-      if (tool === 'fill') { floodFill(sx, sy, color()); return; }
-      drawing = true;
-      snap = ctx.getImageData(0, 0, cv.width, cv.height);
-      if (tool === 'pen' || tool === 'eraser') {
-        ctx.beginPath(); ctx.moveTo(sx, sy);
+      applyStyle();
+      if (tool === 'fill') { snapshot(); ctx.globalAlpha = 1; floodFill(sx, sy, color()); return; }
+      if (tool === 'picker') {
+        const d = ctx.getImageData(sx, sy, 1, 1).data;
+        setColor('#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join(''));
+        selectTool('brush');
+        return;
       }
+      if (tool === 'text') {
+        const txt = prompt('Text to add:');
+        if (txt) {
+          snapshot();
+          applyStyle();
+          ctx.font = Math.max(14, size() * 3) + 'px "Segoe UI", sans-serif';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(txt, sx, sy);
+        }
+        return;
+      }
+      snapshot();
+      drawing = true;
       cv.setPointerCapture(e.pointerId);
+      if (isShape(tool)) {
+        previewSnap = grab();
+      } else if (tool === 'spray') {
+        sprayPos = { x: sx, y: sy };
+        sprayTimer = setInterval(() => {
+          applyStyle();
+          ctx.globalAlpha = Math.min(alpha(), 0.7);
+          for (let i = 0; i < size() * 1.5 + 8; i++) {
+            const a = Math.random() * Math.PI * 2, r = Math.random() * size() * 1.6;
+            ctx.fillRect(sprayPos.x + Math.cos(a) * r, sprayPos.y + Math.sin(a) * r, 1.3, 1.3);
+          }
+        }, 25);
+      } else {
+        last = { x: sx, y: sy };
+        lastMid = { x: sx, y: sy };
+        dot(sx, sy);
+      }
     });
     cv.addEventListener('pointermove', e => {
-      if (!drawing) return;
       const [x, y] = pos(e);
-      ctx.strokeStyle = tool === 'eraser' ? '#fff' : color();
-      ctx.lineWidth = tool === 'eraser' ? size() * 2.5 : size();
-      if (tool === 'pen' || tool === 'eraser') { ctx.lineTo(x, y); ctx.stroke(); }
-      else {
-        ctx.putImageData(snap, 0, 0);
+      $('.ps-pos').textContent = x + ', ' + y + 'px';
+      // brush-size cursor preview
+      if (['brush', 'pencil', 'marker', 'eraser', 'spray'].includes(tool)) {
+        const w = tool === 'pencil' ? 3 : tool === 'eraser' ? size() * 2 : size();
+        cursorEl.style.cssText = `display:block;width:${w}px;height:${w}px;left:${cv.offsetLeft + x}px;top:${cv.offsetTop + y}px`;
+      } else cursorEl.style.display = 'none';
+      if (!drawing) return;
+      applyStyle();
+      if (isShape(tool)) {
+        ctx.putImageData(previewSnap, 0, 0);
+        drawShape(tool, x, y, e.shiftKey);
+      } else if (tool === 'spray') {
+        sprayPos = { x, y };
+      } else {
+        // midpoint-smoothed stroke
+        const mid = { x: (last.x + x) / 2, y: (last.y + y) / 2 };
         ctx.beginPath();
-        if (tool === 'line') { ctx.moveTo(sx, sy); ctx.lineTo(x, y); }
-        else if (tool === 'rect') ctx.rect(Math.min(sx, x), Math.min(sy, y), Math.abs(x - sx), Math.abs(y - sy));
-        else if (tool === 'circle') ctx.ellipse((sx + x) / 2, (sy + y) / 2, Math.abs(x - sx) / 2, Math.abs(y - sy) / 2, 0, 0, Math.PI * 2);
+        ctx.moveTo(lastMid.x, lastMid.y);
+        ctx.quadraticCurveTo(last.x, last.y, mid.x, mid.y);
         ctx.stroke();
+        lastMid = mid;
+        last = { x, y };
       }
     });
-    window.addEventListener('pointerup', () => drawing = false);
-    win.body.querySelector('.pt-clear').addEventListener('click', () => { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); });
-    win.body.querySelector('.pt-save').addEventListener('click', () => {
-      const name = FS.uniqueName(HOME + '/Pictures', 'Drawing', '.png');
-      FS.write(HOME + '/Pictures/' + name, cv.toDataURL('image/png'), 'image/png');
-      Shell.toast('Paint', 'Saved as Pictures/' + name, '🎨');
+    const endStroke = () => {
+      drawing = false;
+      previewSnap = null;
+      stopSpray();
+      ctx.globalAlpha = 1;
+    };
+    cv.addEventListener('pointerup', endStroke);
+    cv.addEventListener('pointercancel', endStroke);
+    cv.addEventListener('pointerleave', () => { if (!drawing) cursorEl.style.display = 'none'; });
+
+    /* ----- open / save / download ----- */
+    function loadImage(src, skipSnapshot) {
+      const img = new Image();
+      img.onload = () => {
+        if (!skipSnapshot) snapshot();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+        const sc = Math.min(cv.width / img.width, cv.height / img.height, 1);
+        const w = img.width * sc, h = img.height * sc;
+        ctx.drawImage(img, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+      };
+      img.src = src;
+    }
+    $('.pt-open').addEventListener('click', e => {
+      e.stopPropagation(); // the same click would immediately close the menu via the document handler
+      const pics = FS.list(HOME + '/Pictures')
+        .filter(f => f.node.type === 'file' && /\.(png|jpe?g|svg|gif|bmp|webp)$/i.test(f.name)).slice(0, 10);
+      const items = pics.map(f => ({ label: f.name, icon: '🖼️', fn: () => loadImage(f.node.content) }));
+      if (items.length) items.push({ sep: true });
+      items.push({ label: 'From this device…', icon: '⬆️', fn: () => fileInput.click() });
+      const r = e.currentTarget.getBoundingClientRect();
+      Shell.contextMenu(r.left, r.bottom + 4, items);
     });
+    fileInput.addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => loadImage(r.result);
+      r.readAsDataURL(f);
+    });
+    function save(forcePrompt) {
+      let name = fileName;
+      if (!name || forcePrompt) {
+        name = prompt('Save as (in Pictures):', name || 'Drawing');
+        if (!name) return;
+      }
+      fileName = name.replace(/\.png$/i, '');
+      FS.write(HOME + '/Pictures/' + fileName + '.png', cv.toDataURL('image/png'), 'image/png');
+      win.setTitle(fileName + '.png - Paint');
+      Shell.toast('Paint', 'Saved to Pictures/' + fileName + '.png', '🎨');
+    }
+    $('.pt-save').addEventListener('click', () => save(false));
+    $('.pt-dl').addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = cv.toDataURL('image/png');
+      a.download = (fileName || 'drawing') + '.png';
+      a.click();
+    });
+    $('.pt-undo').addEventListener('click', undo);
+    $('.pt-redo').addEventListener('click', redo);
+    $('.pt-clear').addEventListener('click', () => {
+      snapshot();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    });
+
+    /* ----- keyboard shortcuts ----- */
+    win.body.tabIndex = 0;
+    win.body.addEventListener('keydown', e => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+      else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); save(false); }
+      else if (!mod) {
+        const keyTool = { b: 'brush', p: 'pencil', m: 'marker', a: 'spray', e: 'eraser', f: 'fill', i: 'picker', t: 'text' }[e.key.toLowerCase()];
+        if (keyTool) selectTool(keyTool);
+        else if (e.key === '[') { $('.pt-size').value = Math.max(1, size() - 2); $('.pt-size-val').textContent = size() + 'px'; }
+        else if (e.key === ']') { $('.pt-size').value = Math.min(64, size() + 2); $('.pt-size-val').textContent = size() + 'px'; }
+      }
+    });
+    win.onClose(stopSpray);
+
+    // opened with an image file (e.g. "Edit in Paint" from Explorer)
+    if (args.path) {
+      const n = FS.get(args.path);
+      if (n) {
+        loadImage(n.content, true); // base image load isn't an undoable action
+        fileName = args.path.split('/').pop().replace(/\.\w+$/, '');
+        win.setTitle(fileName + ' - Paint');
+      }
+    }
+    setTimeout(() => win.body.focus(), 100);
   }
 });
 

@@ -2,7 +2,7 @@
    Bump CACHE version to force clients to refetch everything. */
 'use strict';
 
-const CACHE = 'win11-web-v2';
+const CACHE = 'win11-web-v3';
 const ASSETS = [
   './', './index.html', './css/win11.css',
   './js/kernel.js', './js/wm.js', './js/apps-core.js', './js/apps-office.js',

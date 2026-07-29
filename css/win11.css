@@ -412,8 +412,21 @@ input, textarea, select { font-family: inherit; }
 .term-in input { flex: 1; background: none; border: none; outline: none; color: #ccc; font: inherit; }
 
 /* ============ Paint ============ */
-.paint-canvas-wrap { flex: 1; overflow: auto; background: #808080; display: flex; align-items: flex-start; padding: 12px; }
+.paint-canvas-wrap { flex: 1; overflow: auto; background: #808080; display: flex; align-items: flex-start; padding: 12px; position: relative; }
 .paint-canvas-wrap canvas { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); cursor: crosshair; }
+.brush-cursor {
+  position: absolute; display: none; pointer-events: none; z-index: 4;
+  border: 1px solid rgba(0,0,0,.85); outline: 1px solid rgba(255,255,255,.85);
+  border-radius: 50%; transform: translate(-50%, -50%);
+}
+.paint-palette { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.pt-swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--stroke); cursor: default; }
+.pt-swatch:hover { transform: scale(1.12); }
+.pt-swatch.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.paint-lbl { font-size: 11px; color: var(--text-2); white-space: nowrap; }
+.pt-fillmode { border: 1px solid var(--stroke); background: var(--card-solid); color: var(--text); border-radius: 5px; padding: 4px 6px; font-size: 12px; }
+.paint-status { flex: none; display: flex; justify-content: space-between; border-top: 1px solid var(--stroke); padding: 3px 12px; font-size: 11px; color: var(--text-2); }
+.paint-status .ps-pos { min-width: 90px; }
 
 /* ============ Photos ============ */
 .photos-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; padding: 12px; align-content: start; }
