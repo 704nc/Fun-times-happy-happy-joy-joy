@@ -56,6 +56,7 @@ const Shell = {
     let html = `
       <button class="tb-btn" data-act="start" title="Start"><span class="tb-ico"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="3" width="8.5" height="8.5" rx="1" fill="#0b5cd5"/><rect x="12.5" y="3" width="8.5" height="8.5" rx="1" fill="#0b5cd5"/><rect x="3" y="12.5" width="8.5" height="8.5" rx="1" fill="#0b5cd5"/><rect x="12.5" y="12.5" width="8.5" height="8.5" rx="1" fill="#0b5cd5"/></svg></span></button>
       <button class="tb-btn" data-act="search" title="Search"><span class="tb-ico">🔍</span></button>
+      <button class="tb-btn" data-act="taskview" title="Task view (Win+Tab)"><span class="tb-ico">⧉</span></button>
       <button class="tb-btn ${WM.byApp('copilot').length ? 'running' : ''}" data-launch="copilot" title="Copilot">${appTileHTML(Apps.get('copilot'))}<span class="run-dot"></span></button>`;
     shown.add('copilot');
     const btn = (app, wins) => {
@@ -94,7 +95,7 @@ const Shell = {
     const pinnedIds = ['edge', 'word', 'excel', 'powerpoint', 'store', 'photos', 'settings', 'explorer', 'copilot', 'spotify', 'slack', 'discord', 'mediaplayer', 'notepad', 'paint', 'calculator', 'terminal'];
     const pinned = pinnedIds.map(id => Apps.get(id)).filter(a => a && Apps.isInstalled(a.id));
     const extra = visible.filter(a => !pinnedIds.includes(a.id));
-    document.getElementById('start-pinned').innerHTML = pinned.concat(extra).slice(0, 18).map(a =>
+    document.getElementById('start-pinned').innerHTML = pinned.concat(extra).slice(0, 24).map(a =>
       `<div class="start-app" data-launch="${a.id}">${appTileHTML(a)}<span class="lbl">${a.name}</span></div>`).join('');
     // recommended: recent docs
     const recDocs = FS.list(HOME + '/Documents').filter(f => f.node.type === 'file').slice(0, 4);
@@ -213,10 +214,7 @@ const Shell = {
     });
     document.getElementById('ac-volume').addEventListener('input', e => Synth.setVolume(e.target.value / 100));
     document.getElementById('show-desktop').addEventListener('click', () => WM.all().forEach(w => w.minimize()));
-    document.getElementById('taskbar-widgets').addEventListener('click', () => {
-      if (Apps.isInstalled('weather')) Apps.launch('weather');
-      else this.toast('Widgets', 'Install MSN Weather from the Microsoft Store for the full forecast!', '🌤️');
-    });
+    document.getElementById('taskbar-widgets').addEventListener('click', e => { e.stopPropagation(); Widgets.toggle(); });
   },
 
   /* ----- context menu ----- */
@@ -301,6 +299,7 @@ const Shell = {
       if (!b) return;
       e.stopPropagation();
       if (b.dataset.act === 'start' || b.dataset.act === 'search') this.toggleStart();
+      else if (b.dataset.act === 'taskview') { this.toggleStart(false); TaskView.toggle(); }
       else if (b.dataset.launch) { this.toggleStart(false); this.handleTaskbarClick(b.dataset.launch); }
     });
     // start menu
@@ -320,8 +319,10 @@ const Shell = {
       document.getElementById('start-pinned-section').style.display = '';
     });
     document.getElementById('start-search-input').addEventListener('input', e => this.startSearch(e.target.value.trim()));
-    document.getElementById('power-btn').addEventListener('click', () => {
-      if (confirm('Shut down Windows 11 Web? (This just reloads the page.)')) location.reload();
+    document.getElementById('power-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const r = e.currentTarget.getBoundingClientRect();
+      Power.menu(r.left, r.top - 150);
     });
     // desktop icons — double-click opens; on touch screens a single tap opens
     const openIcon = ic => {

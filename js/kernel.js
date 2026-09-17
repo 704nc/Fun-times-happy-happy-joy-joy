@@ -34,6 +34,7 @@ const Utils = {
 const Bus = {
   _h: {},
   on(ev, fn) { (this._h[ev] = this._h[ev] || []).push(fn); },
+  off(ev, fn) { if (this._h[ev]) this._h[ev] = this._h[ev].filter(f => f !== fn); },
   emit(ev, data) { (this._h[ev] || []).forEach(fn => { try { fn(data); } catch (e) { console.error(e); } }); }
 };
 
@@ -49,7 +50,24 @@ const Settings = {
     nightLight: false,
     installedApps: [],
     pinnedTaskbar: ['explorer', 'edge', 'store', 'word', 'excel', 'powerpoint', 'photos', 'spotify', 'slack', 'discord'],
-    userName: 'Seefood'
+    userName: 'Seefood',
+    clippy: false,
+    screensaver: 'bubbles',
+    screensaverMin: 5,
+    neko: false,
+    avatar: '',
+    narrator: false,
+    cursorTrail: false,
+    edgeProxy: '',
+    retro: '',
+    sounds: true,
+    textScale: 1,
+    highContrast: false,
+    wallpaperSlide: 0,
+    dnd: false,
+    saver: false,
+    fps: false,
+    autoTheme: false
   },
   load() {
     try { this._data = Object.assign({}, this._defaults, JSON.parse(localStorage.getItem(this._key) || '{}')); }
@@ -222,6 +240,19 @@ const FS = {
     this.save();
     Bus.emit('fs:changed', path);
     return true;
+  },
+  copy(src, dstDir) {
+    const node = this.get(src), dir = this.get(dstDir);
+    if (!node || !dir || dir.type !== 'folder') return false;
+    if (node.type === 'folder' && (dstDir === src || dstDir.startsWith(src + '/'))) return false;
+    const name = src.split('/').pop(), dot = name.lastIndexOf('.');
+    const base = node.type === 'file' && dot > 0 ? name.slice(0, dot) : name, ext = node.type === 'file' && dot > 0 ? name.slice(dot) : '';
+    dir.children[this.uniqueName(dstDir, base, ext)] = JSON.parse(JSON.stringify(node));
+    this.save(); Bus.emit('fs:changed', dstDir); return true;
+  },
+  move(src, dstDir) {
+    if (!this.copy(src, dstDir)) return false;
+    return this.remove(src);
   },
   binPath: 'C:/$Recycle.Bin',
   recycle(path) {

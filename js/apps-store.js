@@ -9,16 +9,29 @@ Apps.register({
   category: 'Games', store: true, width: 420, height: 520,
   desc: 'The classic. Clear the board without detonating a mine. Right-click to flag.', rating: 4.8, size: '2.1 MB',
   mount(win) {
-    const W = 9, H = 9, MINES = 10;
-    let grid, revealed, flagged, over, firstClick;
+    const LEVELS = { beginner: [9, 9, 10], intermediate: [16, 16, 40], expert: [30, 16, 99] };
+    let level = Store.get('win11.mines.level', 'beginner');
+    let W, H, MINES, cell;
+    let grid, revealed, flagged, over, firstClick, t0 = 0, timer = null;
     win.body.innerHTML = `
-      <div class="game-center">
-        <div class="game-hud"><span class="ms-mines">💣 ${MINES}</span><button class="fluent-btn subtle ms-new">🙂 New game</button><span class="ms-status"></span></div>
-        <div class="mine-grid" style="grid-template-columns:repeat(${W},30px)"></div>
+      <div class="game-center" style="justify-content:flex-start;overflow:auto">
+        <div class="game-hud"><select class="fluent-input ms-level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="expert">Expert</option></select><span class="ms-mines">💣</span><span class="ms-time">⏱ 0</span><button class="fluent-btn subtle ms-new">🙂 New game</button><span class="ms-status"></span></div>
+        <div class="mine-grid"></div>
+        <div class="ms-best" style="font-size:12px;color:var(--text-2)"></div>
       </div>`;
     const gridEl = win.body.querySelector('.mine-grid');
     const status = win.body.querySelector('.ms-status');
+    const timeEl = win.body.querySelector('.ms-time');
+    win.body.querySelector('.ms-level').value = level;
+    function best() { const b = Store.get('win11.mines.best', {}); win.body.querySelector('.ms-best').textContent = b[level] ? 'Best ' + level + ': ' + b[level] + 's' : ''; return b; }
     function reset() {
+      [W, H, MINES] = LEVELS[level]; cell = W > 16 ? 22 : W > 9 ? 26 : 30;
+      gridEl.style.gridTemplateColumns = `repeat(${W},${cell}px)`;
+      gridEl.style.setProperty('--ms-cell', cell + 'px');
+      clearInterval(timer); timer = null; t0 = 0; timeEl.textContent = '⏱ 0';
+      const wantW = Math.min(innerWidth - 20, W * (cell + 2) + 60), wantH = Math.min(innerHeight - 70, H * (cell + 2) + 170);
+      if (!win.maxed && (win.el.offsetWidth < wantW || win.el.offsetHeight < wantH)) { win.el.style.width = Math.max(win.el.offsetWidth, wantW) + 'px'; win.el.style.height = Math.max(win.el.offsetHeight, wantH) + 'px'; }
+      best();
       grid = Array.from({ length: H }, () => Array(W).fill(0));
       revealed = Array.from({ length: H }, () => Array(W).fill(false));
       flagged = Array.from({ length: H }, () => Array(W).fill(false));
@@ -67,16 +80,16 @@ Apps.register({
     function checkWin() {
       let unrevealed = 0;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!revealed[y][x]) unrevealed++;
-      if (unrevealed === MINES) { over = true; status.textContent = '🎉 You win!'; }
+      if (unrevealed === MINES) { over = true; clearInterval(timer); const secs = Math.max(1, Math.round((Date.now() - t0) / 1000)); status.textContent = '🎉 You win! ' + secs + 's'; Achievements.unlock('minesweeper'); if (level === 'expert') Achievements.unlock('sweeper-expert'); const b = Store.get('win11.mines.best', {}); if (!b[level] || secs < b[level]) { b[level] = secs; Store.set('win11.mines.best', b); Shell.toast('Minesweeper', 'New best time on ' + level + ': ' + secs + 's', '🏅'); } best(); }
     }
     gridEl.addEventListener('click', e => {
       const c = e.target.closest('.mine-cell');
       if (!c || over) return;
       const x = +c.dataset.x, y = +c.dataset.y;
       if (flagged[y][x]) return;
-      if (firstClick) { placeMines(x, y); firstClick = false; }
+      if (firstClick) { placeMines(x, y); firstClick = false; t0 = Date.now(); timer = setInterval(() => { timeEl.textContent = '⏱ ' + Math.floor((Date.now() - t0) / 1000); }, 500); }
       if (grid[y][x] === -1) {
-        over = true;
+        over = true; clearInterval(timer);
         for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) if (grid[yy][xx] === -1) revealed[yy][xx] = true;
         status.textContent = '💥 Boom! Game over.';
       } else { reveal(x, y); checkWin(); }
@@ -90,6 +103,8 @@ Apps.register({
       if (!revealed[y][x]) { flagged[y][x] = !flagged[y][x]; draw(); }
     });
     win.body.querySelector('.ms-new').addEventListener('click', reset);
+    win.body.querySelector('.ms-level').addEventListener('change', e => { level = e.target.value; Store.set('win11.mines.level', level); reset(); });
+    win.onClose(() => clearInterval(timer));
     reset();
   }
 });
@@ -131,6 +146,7 @@ Apps.register({
       if (snake.some(s => s.x === head.x && s.y === head.y)) {
         dead = true; clearInterval(timer);
         if (score > hi) { hi = score; localStorage.setItem('win11.snake.hi', hi); }
+        if (score >= 10) Achievements.unlock('snake');
         draw(); return;
       }
       snake.unshift(head);
@@ -211,7 +227,7 @@ Apps.register({
           for (let y = 0; y < 4; y++) g[y][x] = col[y];
         }
       }
-      if (JSON.stringify(g) !== before) { add(); draw(); }
+      if (JSON.stringify(g) !== before) { add(); draw(); if (g.flat().some(v => v >= 512)) Achievements.unlock('2048'); }
     }
     function draw() {
       board.innerHTML = g.flat().map(v =>
@@ -267,6 +283,7 @@ Apps.register({
     function end(w) {
       over = true;
       status.textContent = w === 'draw' ? '🤝 Draw!' : w === 'X' ? '🎉 You win!' : '🤖 Computer wins!';
+      if (w === 'draw') Achievements.unlock('tictactoe');
     }
     board.addEventListener('click', e => {
       const b = e.target.closest('.ttt-cell');
@@ -290,85 +307,100 @@ Apps.register({
   }
 });
 
-/* Sticky Notes */
-Apps.register({
-  id: 'stickynotes', name: 'Sticky Notes', icon: '🗒️', color: 'linear-gradient(135deg,#ffe259,#ffa751)',
-  category: 'Productivity', store: true, width: 320, height: 340,
-  desc: 'A little yellow square of memory. Auto-saves as you type.', rating: 4.5, size: '0.3 MB',
-  mount(win) {
-    win.body.innerHTML = `<textarea class="sticky-note-area" placeholder="Take a note…" spellcheck="false"></textarea>`;
-    const area = win.body.querySelector('textarea');
-    area.value = localStorage.getItem('win11.sticky') || '';
-    area.addEventListener('input', () => {
-      try { localStorage.setItem('win11.sticky', area.value); } catch (e) {}
-    });
-  }
-});
-
 /* Weather */
 Apps.register({
   id: 'weather', name: 'MSN Weather', icon: '🌤️', color: 'linear-gradient(135deg,#4facfe,#00c6fb)',
-  category: 'Utilities', store: true, width: 620, height: 520,
-  desc: 'A 7-day forecast for Webville. Deterministically generated from the date — meteorology, but honest about it.', rating: 4.1, size: '3.2 MB',
+  category: 'Utilities', store: true, width: 640, height: 560, singleton: true,
+  desc: 'A real 7-day forecast from Open-Meteo for any city on Earth, or your location. Falls back to a lovingly fabricated Webville forecast when offline.', rating: 4.6, size: '3.2 MB',
   mount(win) {
-    const kinds = [['☀️', 'Sunny'], ['🌤️', 'Mostly sunny'], ['⛅', 'Partly cloudy'], ['🌥️', 'Cloudy'], ['🌧️', 'Rain showers'], ['⛈️', 'Thunderstorms'], ['🌫️', 'Foggy']];
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const today = new Date();
-    const rnd = Utils.rng(today.getFullYear() * 400 + today.getMonth() * 31 + today.getDate());
-    const week = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today); d.setDate(d.getDate() + i);
-      const k = kinds[Math.floor(rnd() * kinds.length)];
-      const hi = Math.round(62 + rnd() * 28), lo = hi - Math.round(8 + rnd() * 10);
-      return { day: i === 0 ? 'Today' : days[d.getDay()], ico: k[0], desc: k[1], hi, lo };
+    win.body.innerHTML = `<div class="weather-root"><div class="w-bar"><input class="w-search" placeholder="Search city…" spellcheck="false"><button class="w-loc" title="Use my location">📍</button><button class="w-unit" title="Toggle °F / °C">°${Weather.unit()}</button><button class="w-refresh" title="Refresh">⟳</button></div><div class="w-results"></div><div class="w-body"><div class="placeholder-pane" style="color:#fff"><div class="ph-ico">🌤️</div>Loading forecast…</div></div></div>`;
+    const $ = s => win.body.querySelector(s);
+    function draw(d) {
+      if (!win.body.isConnected) return;
+      const now = Weather.desc(d.now.code);
+      $('.w-body').innerHTML = `
+        <h1>📍 ${Utils.esc(d.loc)}</h1>
+        <div class="weather-now"><div class="w-ico">${now[0]}</div><div><div class="w-temp">${Weather.fmt(d.now.temp)}${Weather.unit()}</div><div>${now[1]}${d.now.feels !== undefined ? ' • Feels like ' + Weather.fmt(d.now.feels) : ''} • Wind ${Math.round(d.now.wind)} mph • Humidity ${Math.round(d.now.humidity)}%</div></div></div>
+        <div class="weather-days">${d.days.map((x, i) => { const k = Weather.desc(x.code); return `<div class="weather-day"><div>${i === 0 ? 'Today' : x.date.toLocaleDateString([], { weekday: 'short' })}</div><div class="wd-ico">${k[0]}</div><div><b>${Weather.fmt(x.hi)}</b> / ${Weather.fmt(x.lo)}</div><div style="font-size:11px;opacity:.85">${k[1]}</div></div>`; }).join('')}</div>
+        <p style="margin-top:22px;font-size:12px;opacity:.75">${d.fake ? 'Offline or blocked — showing the deterministic Webville forecast. Real data returns when the network does.' : 'Live data from Open-Meteo.com • updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p>`;
+    }
+    const load = force => Weather.fetch(force).then(draw);
+    let searchT;
+    $('.w-search').addEventListener('input', e => {
+      clearTimeout(searchT);
+      const q = e.target.value.trim();
+      if (q.length < 2) { $('.w-results').innerHTML = ''; return; }
+      searchT = setTimeout(() => Weather.search(q).then(list => { $('.w-results').innerHTML = list.map((l, i) => `<div class="w-result" data-i="${i}">${Utils.esc(l.name)}</div>`).join('') || '<div class="w-result">No matches</div>'; $('.w-results')._list = list; }).catch(() => { $('.w-results').innerHTML = '<div class="w-result">Search unavailable offline</div>'; }), 350);
     });
-    win.body.innerHTML = `
-      <div class="weather-root">
-        <h1>📍 Webville, Internet</h1>
-        <div class="weather-now">
-          <div class="w-ico">${week[0].ico}</div>
-          <div><div class="w-temp">${week[0].hi}°F</div><div>${week[0].desc} • Low ${week[0].lo}°</div></div>
-        </div>
-        <div class="weather-days">
-          ${week.map(w => `<div class="weather-day"><div>${w.day}</div><div class="wd-ico">${w.ico}</div><div><b>${w.hi}°</b> / ${w.lo}°</div><div style="font-size:11px;opacity:.85">${w.desc}</div></div>`).join('')}
-        </div>
-        <p style="margin-top:22px;font-size:12px;opacity:.75">Forecast generated locally — 100% accurate for Webville, results may vary elsewhere.</p>
-      </div>`;
+    $('.w-results').addEventListener('click', e => { const r = e.target.closest('[data-i]'); if (!r) return; const l = $('.w-results')._list[+r.dataset.i]; $('.w-results').innerHTML = ''; $('.w-search').value = ''; Settings.set('weatherLoc', l); load(true); });
+    $('.w-loc').addEventListener('click', () => Weather.useMyLocation().then(() => load(true)).catch(() => Shell.toast('MSN Weather', 'Couldn\'t get your location (permission denied or unavailable).', '📍')));
+    $('.w-unit').addEventListener('click', () => { Settings.set('weatherUnit', Weather.unit() === 'F' ? 'C' : 'F'); $('.w-unit').textContent = '°' + Weather.unit(); load(true); });
+    $('.w-refresh').addEventListener('click', () => load(true));
+    win.on('weather:changed', d => { if (win.body.isConnected) draw(d); });
+    load(false);
   }
 });
 
 /* Clock */
 Apps.register({
   id: 'clock', name: 'Clock', icon: '⏰', color: 'linear-gradient(135deg,#a18cd1,#5b48a2)',
-  category: 'Utilities', store: true, width: 420, height: 440,
-  desc: 'Clock and stopwatch. Time flies when you are simulating an OS.', rating: 4.4, size: '1.0 MB',
+  category: 'Utilities', store: true, width: 460, height: 500, singleton: true,
+  desc: 'Clock, stopwatch, timers and alarms. Timers and alarms keep running after you close the app, and ring with a toast and a chime.', rating: 4.6, size: '1.0 MB',
   mount(win) {
-    win.body.innerHTML = `
-      <div class="clock-root">
-        <div class="clock-time"></div>
-        <div class="clock-date"></div>
-        <div class="clock-sw">0:00.0</div>
-        <div style="display:flex;gap:8px">
-          <button class="fluent-btn sw-start">Start</button>
-          <button class="fluent-btn subtle sw-reset">Reset</button>
-        </div>
-      </div>`;
-    const timeEl = win.body.querySelector('.clock-time');
-    const dateEl = win.body.querySelector('.clock-date');
-    const swEl = win.body.querySelector('.clock-sw');
-    let swRunning = false, swAcc = 0, swStart = 0;
-    const tick = setInterval(() => {
+    let tab = 'clock';
+    win.body.innerHTML = `<div class="clock-root"><div class="clk-tabs">${[['clock', '🕒 Clock'], ['stopwatch', '⏱ Stopwatch'], ['timer', '⏲ Timer'], ['alarm', '⏰ Alarm']].map(([id, n]) => `<button data-t="${id}" class="${id === tab ? 'sel' : ''}">${n}</button>`).join('')}</div><div class="clk-body"></div></div>`;
+    const body = win.body.querySelector('.clk-body');
+    let swRunning = false, swAcc = 0, swStart = 0, laps = [];
+    function render() {
+      win.body.querySelectorAll('.clk-tabs button').forEach(b => b.classList.toggle('sel', b.dataset.t === tab));
+      if (tab === 'clock') body.innerHTML = `<div class="clock-time"></div><div class="clock-date"></div><div class="clk-zones">${[['Local', 0], ['UTC', 'UTC'], ['New York', 'America/New_York'], ['London', 'Europe/London'], ['Tokyo', 'Asia/Tokyo'], ['Sydney', 'Australia/Sydney']].map(([n, z]) => `<div class="clk-zone"><span>${n}</span><b data-z="${z}"></b></div>`).join('')}</div>`;
+      else if (tab === 'stopwatch') body.innerHTML = `<div class="clock-sw">0:00.0</div><div style="display:flex;gap:8px"><button class="fluent-btn sw-start">${swRunning ? 'Pause' : 'Start'}</button><button class="fluent-btn subtle sw-lap">Lap</button><button class="fluent-btn subtle sw-reset">Reset</button></div><div class="clk-laps">${laps.map((l, i) => `<div>Lap ${i + 1}: ${l}</div>`).join('')}</div>`;
+      else if (tab === 'timer') body.innerHTML = `<div class="clk-presets">${[1, 3, 5, 10, 15, 25].map(m => `<button class="fluent-btn subtle" data-min="${m}">${m} min</button>`).join('')}</div><div style="display:flex;gap:8px;align-items:center"><input class="fluent-input tm-custom" placeholder="e.g. 90s, 2m 30s, 1h" style="flex:1"><button class="fluent-btn tm-add">Start</button></div><div class="clk-list tm-list"></div>`;
+      else body.innerHTML = `<div style="display:flex;gap:8px;align-items:center"><input type="time" class="fluent-input al-time" value="07:30"><input class="fluent-input al-label" placeholder="Label (optional)" style="flex:1"><button class="fluent-btn al-add">Add</button></div><div class="clk-list al-list"></div>`;
+      wire(); tick();
+    }
+    function tick() {
+      if (!body.isConnected) return;
       const now = new Date();
-      timeEl.textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
-      dateEl.textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      const ms = swAcc + (swRunning ? Date.now() - swStart : 0);
-      swEl.textContent = Math.floor(ms / 60000) + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '.' + Math.floor(ms % 1000 / 100);
-    }, 100);
-    win.body.querySelector('.sw-start').addEventListener('click', e => {
-      if (swRunning) { swAcc += Date.now() - swStart; swRunning = false; e.target.textContent = 'Start'; }
-      else { swStart = Date.now(); swRunning = true; e.target.textContent = 'Pause'; }
-    });
-    win.body.querySelector('.sw-reset').addEventListener('click', () => { swAcc = 0; swStart = Date.now(); });
-    win.onClose(() => clearInterval(tick));
+      if (tab === 'clock') {
+        body.querySelector('.clock-time').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+        body.querySelector('.clock-date').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        body.querySelectorAll('[data-z]').forEach(z => { try { z.textContent = now.toLocaleTimeString([], z.dataset.z === '0' ? { hour: 'numeric', minute: '2-digit' } : { hour: 'numeric', minute: '2-digit', timeZone: z.dataset.z }); } catch (e) { z.textContent = '—'; } });
+      } else if (tab === 'stopwatch') {
+        const ms = swAcc + (swRunning ? Date.now() - swStart : 0);
+        body.querySelector('.clock-sw').textContent = fmtSw(ms);
+      } else if (tab === 'timer') {
+        body.querySelector('.tm-list').innerHTML = Timers.list.map(t => { const left = Math.max(0, Math.ceil((t.end - Date.now()) / 1000)); return `<div class="clk-item"><div style="flex:1"><div>${Utils.esc(t.label)}</div><div class="store-progress" style="margin-top:6px"><div style="width:${100 - left / t.total * 100}%"></div></div></div><b>${Utils.fmtTime(left)}</b><button data-cancel="${t.id}" title="Cancel">✕</button></div>`; }).join('') || '<div class="wg-sub" style="padding:10px 0">No timers running. Pick a preset or type a duration.</div>';
+      } else if (tab === 'alarm') {
+        body.querySelector('.al-list').innerHTML = Timers.alarms().map(a => `<div class="clk-item ${a.on ? '' : 'off'}"><div style="flex:1"><div style="font-size:22px">${a.time}</div><div class="wg-sub">${Utils.esc(a.label)}</div></div><div class="switch ${a.on ? 'on' : ''}" data-toggle="${a.id}"></div><button data-del="${a.id}" title="Delete">🗑️</button></div>`).join('') || '<div class="wg-sub" style="padding:10px 0">No alarms. Add one above; it rings even when this window is closed.</div>';
+      }
+    }
+    const fmtSw = ms => Math.floor(ms / 60000) + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '.' + Math.floor(ms % 1000 / 100);
+    function wire() {
+      const $ = s => body.querySelector(s);
+      if (tab === 'stopwatch') {
+        $('.sw-start').addEventListener('click', e => { if (swRunning) { swAcc += Date.now() - swStart; swRunning = false; e.target.textContent = 'Start'; } else { swStart = Date.now(); swRunning = true; e.target.textContent = 'Pause'; } });
+        $('.sw-reset').addEventListener('click', () => { swAcc = 0; swStart = Date.now(); laps = []; render(); });
+        $('.sw-lap').addEventListener('click', () => { laps.push(fmtSw(swAcc + (swRunning ? Date.now() - swStart : 0))); render(); });
+      } else if (tab === 'timer') {
+        body.querySelectorAll('[data-min]').forEach(b => b.addEventListener('click', () => { Timers.add(+b.dataset.min * 60, b.dataset.min + ' minute timer'); tick(); }));
+        const add = () => { const s = parseDuration($('.tm-custom').value); if (!s) { Shell.toast('Clock', 'Try something like "90s", "2m 30s" or "1h".', '⏲'); return; } Timers.add(s, 'Timer (' + $('.tm-custom').value + ')'); $('.tm-custom').value = ''; tick(); };
+        $('.tm-add').addEventListener('click', add); $('.tm-custom').addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+        body.addEventListener('click', e => { const c = e.target.closest('[data-cancel]'); if (c) { Timers.cancel(+c.dataset.cancel); tick(); } });
+      } else if (tab === 'alarm') {
+        $('.al-add').addEventListener('click', () => { if (!$('.al-time').value) return; Timers.addAlarm($('.al-time').value, $('.al-label').value.trim() || 'Alarm'); $('.al-label').value = ''; tick(); });
+        body.addEventListener('click', e => {
+          const t = e.target.closest('[data-toggle]'), d = e.target.closest('[data-del]');
+          if (t) { const a = Timers.alarms(); const x = a.find(z => z.id === +t.dataset.toggle); if (x) x.on = !x.on; Timers.saveAlarms(a); tick(); }
+          if (d) { Timers.saveAlarms(Timers.alarms().filter(z => z.id !== +d.dataset.del)); tick(); }
+        });
+      }
+    }
+    win.body.querySelector('.clk-tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tab = b.dataset.t; render(); } });
+    const iv = setInterval(tick, 100);
+    win.on('timers:changed', () => { if (body.isConnected) tick(); });
+    win.onClose(() => clearInterval(iv));
+    render();
   }
 });
 
@@ -464,8 +496,12 @@ Apps.register({
   id: 'store', name: 'Microsoft Store', icon: '🛍️', color: 'linear-gradient(135deg,#3dd5f3,#0f6cbd)',
   category: 'System', width: 940, height: 620, singleton: true,
   mount(win) {
-    let cat = 'home';
+    let cat = 'home', query = '';
     const downloading = {}; // id -> progress 0..100
+    const REVIEWERS = ['Ada L.', 'Grace H.', 'Linus T.', 'Margaret H.', 'Dennis R.', 'Clippy', 'Neko', 'A Very Real User', 'xX_Gamer_Xx', 'The Boss', 'IT Helpdesk', 'Seefood'];
+    const BLURBS = { 5: ['Exactly what it says on the tin. Five stars.', 'Installed in seconds, no account, no nonsense.', 'My productivity has never been more simulated.', 'Would install again. Did, actually, three times.', 'It just works. Suspicious, but happy.'], 4: ['Great, but I wish it synced to my other browser tab.', 'Solid. Lost a star because Clippy commented on it.', 'Very good. The cat sat on the keyboard mid-game though.', 'Does the thing. Needs dark mode for my dark mood.'], 3: ['It\'s fine. It\'s a browser tab. What did I expect.', 'Works as advertised, and I\'m not sure what I was advertised.'], 2: ['Crashed my PC. (I typed bsod in the terminal.)', 'Uninstalled because I had achievements to earn elsewhere.'], 1: ['Not a real app. Zero stars would be more honest. Still using it daily.'] };
+    const hash = s => { let h = 7; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
+    function reviewsFor(a) { const rnd = Utils.rng(hash(a.id)); const n = 4 + Math.floor(rnd() * 4); const usedT = new Set(), usedW = new Set(); return Array.from({ length: n }, () => { const stars = Math.max(1, Math.min(5, Math.round((a.rating || 4) + (rnd() - .5) * 2.4))); const pool = (BLURBS[stars] || BLURBS[4]).filter(t => !usedT.has(t)); const text = pool.length ? pool[Math.floor(rnd() * pool.length)] : BLURBS[4][0]; usedT.add(text); const ws = REVIEWERS.filter(w => !usedW.has(w)); const who = ws[Math.floor(rnd() * ws.length)]; usedW.add(who); return { who, stars, text, when: Math.floor(rnd() * 200) + 1 }; }); }
     win.body.innerHTML = `
       <div class="store-root">
         <div class="store-side">
@@ -476,7 +512,7 @@ Apps.register({
           <button data-c="Creativity">🎨<span>Create</span></button>
           <button data-c="library">📚<span>Library</span></button>
         </div>
-        <div class="store-content"></div>
+        <div class="store-main"><div class="store-search"><input placeholder="Search apps, games, and more" spellcheck="false"></div><div class="store-content"></div></div>
       </div>`;
     const content = win.body.querySelector('.store-content');
     const storeApps = () => Apps.all().filter(a => a.store);
@@ -492,12 +528,16 @@ Apps.register({
         <div class="store-card" data-app="${a.id}">
           <div class="sc-head">${appTileHTML(a)}<div><div class="sc-name">${a.name}</div><div class="sc-meta">${a.category} • ${a.size || '1 MB'} • Free</div><div class="sc-rating">${'★'.repeat(Math.round(a.rating || 4))}${'☆'.repeat(5 - Math.round(a.rating || 4))} ${a.rating || 4}</div></div></div>
           <div class="sc-desc">${a.desc || ''}</div>
-          ${btn}`;
+          ${btn}<button class="sc-reviews" data-reviews="${a.id}">Ratings & reviews ›</button>
+        </div>`;
     }
     function render() {
       win.body.querySelectorAll('.store-side button').forEach(b => b.classList.toggle('sel', b.dataset.c === cat));
       let apps = storeApps(), head = '';
-      if (cat === 'home') {
+      if (query) {
+        apps = apps.filter(a => (a.name + ' ' + (a.desc || '') + ' ' + a.category).toLowerCase().includes(query));
+        head = `<h1 style="font-size:22px;margin-bottom:16px">Results for "${Utils.esc(query)}"</h1>` + (apps.length ? '' : '<p style="color:var(--text-2)">Nothing matched. Try "game", "music" or "cat".</p>');
+      } else if (cat === 'home') {
         head = `<div class="store-hero"><h1>Microsoft Store</h1><p>Free apps and games that install right into this browser tab — they show up in your Start menu, and they actually run. No account, no credit card, no 37&nbsp;GB updates.</p></div>`;
       } else if (cat === 'library') {
         apps = apps.filter(a => (Settings.get('installedApps') || []).includes(a.id));
@@ -510,12 +550,29 @@ Apps.register({
     }
     win.body.querySelector('.store-side').addEventListener('click', e => {
       const b = e.target.closest('button');
-      if (b) { cat = b.dataset.c; render(); }
+      if (b) { cat = b.dataset.c; query = ''; win.body.querySelector('.store-search input').value = ''; render(); }
     });
+    win.body.querySelector('.store-search input').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); render(); });
+    function showReviews(a) {
+      const revs = reviewsFor(a);
+      const avg = (revs.reduce((s, r) => s + r.stars, 0) / revs.length).toFixed(1);
+      const counts = [5, 4, 3, 2, 1].map(s => revs.filter(r => r.stars === s).length);
+      const dlg = Utils.el('div', 'store-dlg');
+      dlg.innerHTML = `<div class="store-dlg-card"><div class="sc-head">${appTileHTML(a)}<div><div class="sc-name">${a.name}</div><div class="sc-meta">${revs.length} ratings • ${avg} ★ average</div></div><button class="store-dlg-x">✕</button></div>
+        <div class="store-bars">${counts.map((c, i) => `<div class="store-bar"><span>${5 - i}★</span><div><div style="width:${c / revs.length * 100}%"></div></div><span>${c}</span></div>`).join('')}</div>
+        <div class="store-revs">${revs.map(r => `<div class="store-rev"><div class="store-rev-h"><b>${Utils.esc(r.who)}</b><span>${'★'.repeat(r.stars)}${'☆'.repeat(5 - r.stars)}</span><small>${r.when} day${r.when === 1 ? '' : 's'} ago</small></div><div>${Utils.esc(r.text)}</div></div>`).join('')}</div>
+        <div class="oc-btns"><input class="fluent-input store-rev-in" placeholder="Write a review (it will be ignored with great care)" style="flex:1"><button class="fluent-btn store-rev-add">Post</button></div></div>`;
+      win.body.querySelector('.store-root').appendChild(dlg);
+      dlg.querySelector('.store-dlg-x').addEventListener('click', () => dlg.remove());
+      dlg.addEventListener('click', e => { if (e.target === dlg) dlg.remove(); });
+      dlg.querySelector('.store-rev-add').addEventListener('click', () => { const t = dlg.querySelector('.store-rev-in').value.trim(); if (!t) return; dlg.querySelector('.store-revs').insertAdjacentHTML('afterbegin', `<div class="store-rev"><div class="store-rev-h"><b>${Utils.esc(Settings.get('userName') || 'You')}</b><span>★★★★★</span><small>just now</small></div><div>${Utils.esc(t)}</div></div>`); dlg.querySelector('.store-rev-in').value = ''; Shell.toast('Microsoft Store', 'Thanks for your review! It has been filed under "reviews".', '🛍️'); });
+    }
     content.addEventListener('click', e => {
       const inst = e.target.closest('[data-install]');
       const open = e.target.closest('[data-open]');
       const unin = e.target.closest('[data-uninstall]');
+      const rev = e.target.closest('[data-reviews]');
+      if (rev) { showReviews(Apps.get(rev.dataset.reviews)); return; }
       if (inst) {
         const id = inst.dataset.install;
         downloading[id] = 0;
@@ -539,7 +596,7 @@ Apps.register({
         render();
       }
     });
-    Bus.on('apps:changed', () => { if (win.body.isConnected) render(); });
+    win.on('apps:changed', () => { if (win.body.isConnected) render(); });
     render();
   }
 });

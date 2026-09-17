@@ -24,7 +24,8 @@ Apps.register({
   category: 'System', width: 900, height: 580,
   mount(win, args) {
     let cwd = args.path || HOME;
-    let history = [cwd], hIdx = 0, selected = null;
+    let history = [cwd], hIdx = 0, selected = null, view = Store.get('win11.fx.view', 'grid'), sortBy = 'name', filter = '', preview = Store.get('win11.fx.preview', false);
+    const sizeOf = n => n.type === 'folder' ? Object.keys(n.children).length : String(n.content || '').length;
     win.body.innerHTML = `
       <div class="fx-root">
         <div class="app-toolbar">
@@ -34,10 +35,16 @@ Apps.register({
           <div class="fx-breadcrumb"></div>
           <button class="fx-newfolder">➕ New folder</button>
           <button class="fx-newfile">📄 New file</button>
+          <label class="fx-upload" title="Upload files from your computer">⬆️ Upload<input type="file" multiple style="display:none"></label>
+          <select class="fx-sort" title="Sort"><option value="name">Name</option><option value="type">Type</option><option value="size">Size</option></select>
+          <button class="fx-view" title="Toggle list / grid view">☰</button>
+          <input class="fx-search" placeholder="Search this folder" spellcheck="false">
+          <button class="fx-preview-btn" title="Preview pane (Space)">👁</button>
         </div>
         <div class="fx-main">
           <div class="fx-side"></div>
-          <div class="fx-files"></div>
+          <div class="fx-files" tabindex="0"></div>
+          <div class="fx-preview" style="display:none"></div>
         </div>
         <div class="fx-status"></div>
       </div>`;
@@ -71,11 +78,17 @@ Apps.register({
         acc = i === 0 ? 'C:' : acc + '/' + c;
         return `<span class="fx-crumb" data-p="${acc}">${Utils.esc(c)}</span>` + (i < crumbs.length - 1 ? '<span> › </span>' : '');
       }).join('');
-      const items = FS.list(cwd);
+      let items = FS.list(cwd);
+      if (filter) items = items.filter(i => i.name.toLowerCase().includes(filter));
+      if (sortBy === 'type') items.sort((a, b) => (a.node.type !== b.node.type) ? (a.node.type === 'folder' ? -1 : 1) : (a.name.split('.').pop() || '').localeCompare(b.name.split('.').pop() || '') || a.name.localeCompare(b.name));
+      else if (sortBy === 'size') items.sort((a, b) => sizeOf(b.node) - sizeOf(a.node));
+      $('.fx-files').classList.toggle('list', view === 'list');
+      $('.fx-view').textContent = view === 'list' ? '▦' : '☰';
       $('.fx-files').innerHTML = items.map(it =>
-        `<div class="fx-item" data-n="${Utils.esc(it.name)}"><div class="fx-ico">${fileIcon(it.name, it.node)}</div><div class="fx-name">${Utils.esc(it.name)}</div></div>`
-      ).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--text-2);padding:40px">This folder is empty.</div>';
-      $('.fx-status').textContent = items.length + ' item' + (items.length === 1 ? '' : 's');
+        `<div class="fx-item" data-n="${Utils.esc(it.name)}"><div class="fx-ico">${fileIcon(it.name, it.node)}</div><div class="fx-name">${Utils.esc(it.name)}</div>${view === 'list' ? `<div class="fx-meta">${it.node.type === 'folder' ? 'File folder' : (it.name.split('.').pop() || '').toUpperCase() + ' file'}</div><div class="fx-meta">${it.node.type === 'folder' ? sizeOf(it.node) + ' items' : Utils.fmtBytes(sizeOf(it.node))}</div>` : ''}</div>`
+      ).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--text-2);padding:40px">' + (filter ? 'No items match your search.' : 'This folder is empty.') + '</div>';
+      $('.fx-status').textContent = items.length + ' item' + (items.length === 1 ? '' : 's') + (selected ? ' • ' + selected + ' selected' : '');
+      renderPreview();
     }
     $('.fx-breadcrumb').addEventListener('click', e => {
       const c = e.target.closest('.fx-crumb');
@@ -95,14 +108,130 @@ Apps.register({
     });
     const files = $('.fx-files');
     const inBin = () => cwd === FS.binPath || cwd.startsWith(FS.binPath + '/');
+    // import real files (upload button or drag-and-drop from the OS)
+    function importFiles(list) {
+      if (inBin()) { Shell.toast('File Explorer', 'You can\'t put files straight into the Recycle Bin. Well, you can, but why?', '🗑️'); return; }
+      let n = 0;
+      [...list].forEach(f => {
+        if (f.size > 1.5 * 1048576) { Shell.toast('File Explorer', f.name + ' is too large (max 1.5 MB — browser storage is limited).', '⚠️'); return; }
+        const r = new FileReader();
+        const isText = /^text\/|json|xml|javascript/.test(f.type) || /\.(txt|md|csv|json|js|css|html?|log|xml|ini|cfg)$/i.test(f.name);
+        r.onload = () => {
+          const dot = f.name.lastIndexOf('.');
+          const base = dot > 0 ? f.name.slice(0, dot) : f.name, ext = dot > 0 ? f.name.slice(dot) : '';
+          FS.write(cwd + '/' + FS.uniqueName(cwd, base, ext), r.result, f.type || (isText ? 'text/plain' : 'application/octet-stream'));
+          if (++n === 1) Achievements.unlock('uploader');
+        };
+        isText ? r.readAsText(f) : r.readAsDataURL(f);
+      });
+    }
+    $('.fx-upload input').addEventListener('change', e => { importFiles(e.target.files); e.target.value = ''; });
+    $('.fx-sort').addEventListener('change', e => { sortBy = e.target.value; render(); });
+    $('.fx-view').addEventListener('click', () => { view = view === 'list' ? 'grid' : 'list'; Store.set('win11.fx.view', view); render(); });
+    $('.fx-search').addEventListener('input', e => { filter = e.target.value.trim().toLowerCase(); render(); });
+    function renderPreview() {
+      const pane = $('.fx-preview');
+      pane.style.display = preview ? '' : 'none';
+      $('.fx-preview-btn').classList.toggle('on', preview);
+      if (!preview) return;
+      if (!selected) { pane.innerHTML = '<div class="fx-pv-empty">Select a file to preview it</div>'; return; }
+      const p = cwd + '/' + selected, n = FS.get(p);
+      if (!n) { pane.innerHTML = ''; return; }
+      const name = Utils.esc(selected), c = String(n.content || '');
+      let body;
+      if (n.type === 'folder') body = `<div class="fx-pv-big">📁</div><div class="fx-pv-meta">${Object.keys(n.children).length} items</div>`;
+      else if (/\.(png|jpe?g|gif|svg|webp|bmp)$/i.test(selected)) body = `<img src="${c}" alt="">`;
+      else if (/\.(mp4|webm|mov)$/i.test(selected)) body = `<video src="${c}" controls playsinline></video>`;
+      else if (/\.(mp3|wav|ogg|m4a)$/i.test(selected)) body = `<div class="fx-pv-big">🎵</div><audio src="${c}" controls></audio>`;
+      else if (/\.docx?$/i.test(selected)) body = `<div class="fx-pv-doc">${c}</div>`;
+      else if (/\.xlsx?$/i.test(selected)) { let cells = {}; try { cells = JSON.parse(c).cells || {}; } catch (e) {} const rows = {}; Object.entries(cells).forEach(([k, v]) => { const m = k.match(/^([A-Z])(\d+)$/); if (m && +m[2] <= 8) (rows[m[2]] = rows[m[2]] || {})[m[1]] = v; }); body = `<table class="fx-pv-tbl">${Object.keys(rows).sort((a, b) => a - b).map(r => `<tr>${['A', 'B', 'C', 'D', 'E'].map(col => `<td>${Utils.esc(String(rows[r][col] || ''))}</td>`).join('')}</tr>`).join('')}</table>`; }
+      else if (/\.pptx?$/i.test(selected)) { let sl = []; try { sl = JSON.parse(c).slides || []; } catch (e) {} body = sl.slice(0, 4).map((s, i) => `<div class="fx-pv-slide"><b>${i + 1}. ${Utils.esc(s.title)}</b><div>${Utils.esc(s.body).slice(0, 80)}</div></div>`).join('') + (sl.length > 4 ? `<div class="fx-pv-meta">+${sl.length - 4} more slides</div>` : ''); }
+      else if (/^data:/.test(c)) body = `<div class="fx-pv-big">${fileIcon(selected, n)}</div><div class="fx-pv-meta">Binary file</div>`;
+      else body = `<pre>${Utils.esc(c.slice(0, 3000))}${c.length > 3000 ? '\n…' : ''}</pre>`;
+      pane.innerHTML = `<div class="fx-pv-name">${name}</div>${body}<div class="fx-pv-meta">${n.type === 'folder' ? 'Folder' : (n.mime || 'text/plain') + ' • ' + Utils.fmtBytes(c.length)}</div>`;
+    }
+    $('.fx-preview-btn').addEventListener('click', () => { preview = !preview; Store.set('win11.fx.preview', preview); renderPreview(); });
+    files.addEventListener('keydown', e => { if (e.key === ' ' && !e.target.matches('input')) { e.preventDefault(); preview = !preview; Store.set('win11.fx.preview', preview); renderPreview(); } });
+    function properties(name) {
+      const p = cwd + '/' + name, n = FS.get(p); if (!n) return;
+      const dlg = Utils.el('div', 'fx-props');
+      const count = (node) => { let f = 0, d = 0; const walk = x => { for (const c of Object.values(x.children || {})) { if (c.type === 'folder') { d++; walk(c); } else f++; } }; walk(node); return { f, d }; };
+      const c = n.type === 'folder' ? count(n) : null;
+      const size = n.type === 'folder' ? (() => { let s = 0; const walk = x => { for (const ch of Object.values(x.children || {})) ch.type === 'folder' ? walk(ch) : s += String(ch.content || '').length; }; walk(n); return s; })() : sizeOf(n);
+      dlg.innerHTML = `<div class="fx-props-card"><div class="fx-props-head"><span style="font-size:32px">${fileIcon(name, n)}</span><div><div style="font-weight:600">${Utils.esc(name)}</div><div style="font-size:12px;color:var(--text-2)">${n.type === 'folder' ? 'File folder' : (n.mime || 'text/plain')}</div></div></div>
+        <div class="fx-props-row"><span>Location</span><span>${Utils.esc(cwd.replace(/\//g, '\\'))}</span></div>
+        <div class="fx-props-row"><span>Size</span><span>${Utils.fmtBytes(size)}${c ? ` (${c.f} files, ${c.d} folders)` : ''}</span></div>
+        <div class="fx-props-row"><span>Type</span><span>${n.type === 'folder' ? 'Folder' : (name.split('.').pop() || 'file').toUpperCase()}</span></div>
+        <div class="fx-props-row"><span>Storage</span><span>Browser localStorage</span></div>
+        <div class="oc-btns" style="justify-content:flex-end"><button class="fluent-btn">OK</button></div></div>`;
+      win.body.querySelector('.fx-root').appendChild(dlg);
+      dlg.querySelector('button').addEventListener('click', () => dlg.remove());
+    }
+    ['dragenter', 'dragover'].forEach(ev => files.addEventListener(ev, e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); files.classList.add('drop'); } }));
+    files.addEventListener('dragleave', () => files.classList.remove('drop'));
+    files.addEventListener('drop', e => { e.preventDefault(); files.classList.remove('drop'); if (e.dataTransfer.files.length) importFiles(e.dataTransfer.files); });
+    function download(path) {
+      const n = FS.get(path); if (!n || n.type !== 'file') return;
+      const name = path.split('/').pop();
+      let href;
+      if (/^data:/.test(String(n.content))) href = n.content;
+      else if (/\.(doc|xls|ppt)$/i.test(name)) href = URL.createObjectURL(new Blob([String(n.content)], { type: 'text/html' }));
+      else href = URL.createObjectURL(new Blob([String(n.content)], { type: n.mime || 'text/plain' }));
+      const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      if (href.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(href), 5000);
+    }
+    win._fxDownload = download;
+    const OPEN_WITH = [['notepad', 'Notepad'], ['word', 'Word'], ['paint', 'Paint'], ['photos', 'Photos'], ['mediaplayer', 'Media Player'], ['edge', 'Microsoft Edge']];
+    function pasteHere() {
+      const cb = FS._clip; if (!cb) return;
+      const paths = cb.paths || [cb.path];
+      const ok = paths.map(p => cb.cut ? FS.move(p, cwd) : FS.copy(p, cwd)).some(Boolean);
+      if (ok) { Achievements.unlock('organizer'); if (cb.cut) FS._clip = null; } else Shell.toast('File Explorer', 'Can\'t paste that here.', '⚠️');
+    }
+    win.body.addEventListener('keydown', e => {
+      if (!(e.ctrlKey || e.metaKey) || e.target.matches('input')) return;
+      if (e.key === 'c' && selSet.length) FS._clip = { path: cwd + '/' + selSet[0], paths: selSet.map(n => cwd + '/' + n), cut: false };
+      else if (e.key === 'x' && selSet.length) FS._clip = { path: cwd + '/' + selSet[0], paths: selSet.map(n => cwd + '/' + n), cut: true };
+      else if (e.key === 'v') pasteHere();
+      else return;
+      e.preventDefault();
+    });
+    let selSet = [], anchor = null;
+    const applySel = () => { files.querySelectorAll('.fx-item').forEach(x => x.classList.toggle('sel', selSet.includes(x.dataset.n))); selected = selSet.length ? selSet[selSet.length - 1] : null; renderPreview(); $('.fx-status').textContent = $('.fx-status').textContent.replace(/ • .*$/, '') + (selSet.length > 1 ? ' • ' + selSet.length + ' selected' : selected ? ' • ' + selected + ' selected' : ''); };
     files.addEventListener('click', e => {
       const it = e.target.closest('.fx-item');
-      files.querySelectorAll('.fx-item').forEach(x => x.classList.remove('sel'));
-      selected = it ? it.dataset.n : null;
-      if (it) {
-        it.classList.add('sel');
-        if (TOUCH && !inBin()) openFile(cwd + '/' + it.dataset.n);
-      }
+      if (e.target.matches('input.fx-rename')) return;
+      files.focus();
+      const names = [...files.querySelectorAll('.fx-item')].map(x => x.dataset.n);
+      if (!it) { selSet = []; applySel(); return; }
+      if (e.ctrlKey || e.metaKey) { selSet = selSet.includes(it.dataset.n) ? selSet.filter(n => n !== it.dataset.n) : selSet.concat([it.dataset.n]); anchor = it.dataset.n; }
+      else if (e.shiftKey && anchor && names.includes(anchor)) { const a = names.indexOf(anchor), b2 = names.indexOf(it.dataset.n); selSet = names.slice(Math.min(a, b2), Math.max(a, b2) + 1); }
+      else { selSet = [it.dataset.n]; anchor = it.dataset.n; }
+      applySel();
+      if (it && !e.ctrlKey && !e.shiftKey && TOUCH && !inBin()) openFile(cwd + '/' + it.dataset.n);
+    });
+    function renameInline(name) {
+      const it = files.querySelector(`.fx-item[data-n="${CSS.escape(name)}"]`); if (!it) return;
+      const label = it.querySelector('.fx-name');
+      const inp = Utils.el('input', 'fx-rename'); inp.value = name; label.replaceWith(inp);
+      const dot = name.lastIndexOf('.'); inp.focus(); inp.setSelectionRange(0, dot > 0 ? dot : name.length);
+      let doneR = false;
+      const finish = ok => { if (doneR) return; doneR = true; const v = inp.value.trim(); if (ok && v && v !== name) { if (!FS.rename(cwd + '/' + name, v)) { Shell.toast('File Explorer', 'That name is invalid or already exists.', '⚠️'); render(); } else { selSet = [v]; } } else render(); };
+      inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); });
+      inp.addEventListener('blur', () => finish(true));
+      inp.addEventListener('click', e => e.stopPropagation());
+      inp.addEventListener('dblclick', e => e.stopPropagation());
+    }
+    files.addEventListener('keydown', e => {
+      if (e.target.matches('input')) return;
+      const names = [...files.querySelectorAll('.fx-item')].map(x => x.dataset.n);
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') { e.preventDefault(); selSet = names.slice(); applySel(); }
+      else if (e.key === 'Delete' && selSet.length) { e.preventDefault(); if (inBin()) { if (confirm('Permanently delete ' + selSet.length + ' item(s)?')) selSet.forEach(n => FS.remove(cwd + '/' + n)); } else selSet.forEach(n => FS.recycle(cwd + '/' + n)); selSet = []; }
+      else if (e.key === 'F2' && selected) { e.preventDefault(); renameInline(selected); }
+      else if (e.key === 'Enter' && selected && !inBin()) { e.preventDefault(); openFile(cwd + '/' + selected); }
+      else if (e.key === 'Backspace' && !e.ctrlKey) { e.preventDefault(); $('.fx-up').click(); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); const i = names.indexOf(selected); const n = names[Math.min(names.length - 1, i + 1)]; if (n) { selSet = [n]; anchor = n; applySel(); } }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); const i = names.indexOf(selected); const n = names[Math.max(0, i - 1)]; if (n) { selSet = [n]; anchor = n; applySel(); } }
     });
     files.addEventListener('dblclick', e => {
       const it = e.target.closest('.fx-item');
@@ -125,11 +254,16 @@ Apps.register({
         if (/\.(png|jpe?g|svg|gif|bmp|webp)$/i.test(it.dataset.n)) {
           items.push({ label: 'Edit in Paint', icon: '🎨', fn: () => Apps.launch('paint', { path: p }) });
         }
+        if (FS.get(p) && FS.get(p).type === 'file') items.push({ label: 'Download to this computer', icon: '⬇️', fn: () => download(p) });
+        items.push({ label: 'Properties', icon: 'ℹ️', fn: () => properties(it.dataset.n) });
+        if (/\.zip$/i.test(it.dataset.n)) items.splice(1, 0, { label: 'Extract all…', icon: '📂', fn: () => Zip.extract(p, p.replace(/\.zip$/i, '')).then(n => Shell.toast('File Explorer', 'Extracted ' + n + ' file(s) to ' + p.split('/').pop().replace(/\.zip$/i, ''), '🗜️')).catch(err => Shell.toast('File Explorer', 'Couldn\'t extract: ' + err.message, '⚠️')) });
+        else items.splice(items.findIndex(x => x.label === 'Rename'), 0, { label: 'Compress to ZIP file', icon: '🗜️', fn: () => Zip.compress(p).then(r => Shell.toast('File Explorer', r.name + ' created (' + r.count + ' files, ' + Utils.fmtBytes(r.size) + ') and downloaded.', '🗜️')).catch(err => Shell.toast('File Explorer', 'Couldn\'t compress: ' + err.message, '⚠️')) });
+        if (FS.get(p) && FS.get(p).type === 'file') items.splice(1, 0, { label: 'Open with…', icon: '🧩', fn: () => setTimeout(() => Shell.contextMenu(e.clientX + 20, e.clientY + 10, OPEN_WITH.filter(([id]) => Apps.isInstalled(id)).map(([id, n]) => ({ label: n, icon: Apps.get(id).letter ? '' : Apps.get(id).icon, fn: () => Apps.launch(id, id === 'edge' ? { url: FS.get(p).content } : { path: p }) }))), 0) });
+        const group = selSet.includes(it.dataset.n) && selSet.length > 1 ? selSet.map(n => cwd + '/' + n) : [p];
+        items.splice(items.findIndex(x => x.label === 'Rename'), 0, { label: 'Copy' + (group.length > 1 ? ' ' + group.length + ' items' : ''), icon: '📋', fn: () => { FS._clip = { path: p, paths: group, cut: false }; } }, { label: 'Cut' + (group.length > 1 ? ' ' + group.length + ' items' : ''), icon: '✂️', fn: () => { FS._clip = { path: p, paths: group, cut: true }; } });
+        if (group.length > 1) { const d = items.findIndex(x => x.label === 'Delete'); if (d >= 0) items[d] = { label: 'Delete ' + group.length + ' items', icon: '🗑️', fn: () => group.forEach(g => FS.recycle(g)) }; }
         items.push(
-          { label: 'Rename', icon: '✏️', fn: () => {
-            const n = prompt('Rename to:', it.dataset.n);
-            if (n) FS.rename(p, n);
-          } },
+          { label: 'Rename', icon: '✏️', fn: () => { selSet = [it.dataset.n]; applySel(); renameInline(it.dataset.n); } },
           { sep: true },
           { label: 'Delete', icon: '🗑️', fn: () => FS.recycle(p) }
         );
@@ -143,12 +277,14 @@ Apps.register({
         Shell.contextMenu(e.clientX, e.clientY, [
           { label: 'New folder', icon: '📁', fn: () => FS.mkdir(cwd + '/' + FS.uniqueName(cwd, 'New folder', '')) },
           { label: 'New text file', icon: '📄', fn: () => FS.write(cwd + '/' + FS.uniqueName(cwd, 'New Text Document', '.txt'), '', 'text/plain') },
+          { label: 'Upload files…', icon: '⬆️', fn: () => $('.fx-upload input').click() },
+          ...(FS._clip ? [{ sep: true }, { label: 'Paste ' + FS._clip.path.split('/').pop(), icon: '📋', fn: pasteHere }] : []),
           { label: 'Refresh', icon: '🔄', fn: render }
         ]);
       }
     });
     const onFs = () => { if (FS.get(cwd)) render(); else nav(HOME); };
-    Bus.on('fs:changed', onFs);
+    win.on('fs:changed', onFs);
     render();
   }
 });
@@ -158,42 +294,93 @@ Apps.register({
   id: 'notepad', name: 'Notepad', icon: '📝', color: 'linear-gradient(135deg,#6ec6ff,#2286c3)',
   category: 'Productivity', width: 700, height: 500,
   mount(win, args) {
-    let path = args.path || null;
+    let path = args.path || null, zoom = 100, dirty = false;
     win.body.innerHTML = `
       <div class="app-toolbar">
         <button class="np-new">New</button>
         <button class="np-save">Save</button>
         <button class="np-saveas">Save As…</button>
+        <button class="np-open">Open…</button>
+        <button class="np-print" title="Print (Ctrl+P)">🖨️</button>
+        <button class="np-find" title="Find / Replace (Ctrl+H)">🔍 Find</button>
+        <label class="np-wrap" title="Word wrap"><input type="checkbox" checked> Wrap</label>
+        <button class="np-zoom-out" title="Zoom out (Ctrl+-)">−</button><span class="np-zoom">100%</span><button class="np-zoom-in" title="Zoom in (Ctrl++)">+</button>
         <span style="margin-left:auto;font-size:12px;color:var(--text-2)" class="np-status"></span>
       </div>
-      <textarea class="notepad-area" spellcheck="false" placeholder="Start typing…"></textarea>`;
-    const area = win.body.querySelector('.notepad-area');
-    const status = win.body.querySelector('.np-status');
+      <div class="np-findbar" style="display:none"><input class="fluent-input np-q" placeholder="Find" spellcheck="false"><input class="fluent-input np-r" placeholder="Replace with" spellcheck="false"><button class="fluent-btn subtle np-next">Next</button><button class="fluent-btn subtle np-replace">Replace</button><button class="fluent-btn subtle np-replaceall">Replace all</button><span class="np-count"></span><button class="np-findx" title="Close">✕</button></div>
+      <textarea class="notepad-area" spellcheck="false" placeholder="Start typing…"></textarea>
+      <div class="np-bar"><span class="np-pos">Ln 1, Col 1</span><span class="np-words">0 words</span><span class="np-enc">UTF-8</span></div>`;
+    const $ = s => win.body.querySelector(s);
+    const area = $('.notepad-area'), status = $('.np-status');
+    function title() { win.setTitle((dirty ? '*' : '') + (path ? path.split('/').pop() : 'Untitled') + ' - Notepad'); }
     function loadFile() {
-      if (path) {
-        const n = FS.get(path);
-        area.value = n ? String(n.content) : '';
-        win.setTitle((path.split('/').pop()) + ' - Notepad');
-      } else win.setTitle('Untitled - Notepad');
+      if (path) { const n = FS.get(path); area.value = n ? String(n.content) : ''; }
+      dirty = false; title(); bar();
     }
+    function writeOut() { FS.write(path, area.value, 'text/plain'); dirty = false; title(); status.textContent = 'Saved ✓'; setTimeout(() => status.textContent = '', 1600); }
     function save(as) {
-      if (!path || as) {
-        const name = prompt('Save as (in Documents):', path ? path.split('/').pop() : 'note.txt');
-        if (!name) return;
-        path = HOME + '/Documents/' + name;
-      }
-      FS.write(path, area.value, 'text/plain');
-      win.setTitle(path.split('/').pop() + ' - Notepad');
-      status.textContent = 'Saved ✓';
-      setTimeout(() => status.textContent = '', 1600);
+      if (!path || as) { FileDialog.show({ mode: 'save', dir: path ? path.split('/').slice(0, -1).join('/') : HOME + '/Documents', name: path ? path.split('/').pop() : 'note.txt', exts: ['.txt', '.md', '.log', '.csv', '.json'] }).then(p => { if (p) { path = p; writeOut(); } }); return; }
+      writeOut();
     }
-    win.body.querySelector('.np-new').addEventListener('click', () => { path = null; area.value = ''; loadFile(); });
-    win.body.querySelector('.np-save').addEventListener('click', () => save(false));
-    win.body.querySelector('.np-saveas').addEventListener('click', () => save(true));
-    area.addEventListener('keydown', e => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(false); }
+    function bar() {
+      const v = area.value, pos = area.selectionStart;
+      const before = v.slice(0, pos), ln = before.split('\n').length, col = pos - before.lastIndexOf('\n');
+      $('.np-pos').textContent = `Ln ${ln}, Col ${col}`;
+      $('.np-words').textContent = `${(v.match(/\S+/g) || []).length} words • ${v.length} chars`;
+    }
+    function setZoom(z) { zoom = Utils.clamp(z, 50, 300); area.style.fontSize = (14 * zoom / 100) + 'px'; $('.np-zoom').textContent = zoom + '%'; }
+    function findNext(fromStart) {
+      const q = $('.np-q').value; if (!q) return false;
+      const from = fromStart ? 0 : area.selectionEnd;
+      let i = area.value.toLowerCase().indexOf(q.toLowerCase(), from);
+      if (i < 0 && !fromStart) i = area.value.toLowerCase().indexOf(q.toLowerCase(), 0);
+      if (i < 0) { $('.np-count').textContent = 'Not found'; return false; }
+      area.focus(); area.setSelectionRange(i, i + q.length);
+      const all = area.value.toLowerCase().split(q.toLowerCase()).length - 1;
+      $('.np-count').textContent = all + ' match' + (all === 1 ? '' : 'es');
+      return true;
+    }
+    $('.np-new').addEventListener('click', () => { if (dirty && !confirm('Discard unsaved changes?')) return; path = null; area.value = ''; loadFile(); });
+    $('.np-save').addEventListener('click', () => save(false));
+    $('.np-saveas').addEventListener('click', () => save(true));
+    $('.np-open').addEventListener('click', () => { FileDialog.show({ mode: 'open', dir: path ? path.split('/').slice(0, -1).join('/') : HOME + '/Documents', filter: /\.(txt|md|log|csv|json|js|css|html?|xml|ini|cfg)$/i }).then(p => { if (p) { path = p; loadFile(); } }); });
+    $('.np-print').addEventListener('click', () => Printer.print('<pre style="font:13px/1.5 Consolas,monospace;white-space:pre-wrap">' + Utils.esc(area.value) + '</pre>', path ? path.split('/').pop() : 'Untitled'));
+    $('.np-find').addEventListener('click', () => { $('.np-findbar').style.display = ''; $('.np-q').focus(); $('.np-q').select(); });
+    $('.np-findx').addEventListener('click', () => { $('.np-findbar').style.display = 'none'; area.focus(); });
+    $('.np-next').addEventListener('click', () => findNext(false));
+    $('.np-q').addEventListener('keydown', e => { if (e.key === 'Enter') findNext(false); if (e.key === 'Escape') $('.np-findx').click(); });
+    $('.np-replace').addEventListener('click', () => {
+      const q = $('.np-q').value; if (!q) return;
+      const selTxt = area.value.slice(area.selectionStart, area.selectionEnd);
+      if (selTxt.toLowerCase() === q.toLowerCase()) { area.setRangeText($('.np-r').value, area.selectionStart, area.selectionEnd, 'end'); dirty = true; title(); }
+      findNext(false);
     });
+    $('.np-replaceall').addEventListener('click', () => {
+      const q = $('.np-q').value; if (!q) return;
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      const n = (area.value.match(re) || []).length;
+      area.value = area.value.replace(re, $('.np-r').value); dirty = true; title(); bar();
+      $('.np-count').textContent = 'Replaced ' + n;
+    });
+    $('.np-wrap input').addEventListener('change', e => { area.style.whiteSpace = e.target.checked ? '' : 'pre'; area.wrap = e.target.checked ? 'soft' : 'off'; });
+    $('.np-zoom-in').addEventListener('click', () => setZoom(zoom + 10));
+    $('.np-zoom-out').addEventListener('click', () => setZoom(zoom - 10));
+    area.addEventListener('keydown', e => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === 's') { e.preventDefault(); save(e.shiftKey); }
+      else if (mod && e.key === 'o') { e.preventDefault(); $('.np-open').click(); }
+      else if (mod && e.key === 'p') { e.preventDefault(); $('.np-print').click(); }
+      else if (mod && (e.key === 'h' || e.key === 'f')) { e.preventDefault(); $('.np-find').click(); }
+      else if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); setZoom(zoom + 10); }
+      else if (mod && e.key === '-') { e.preventDefault(); setZoom(zoom - 10); }
+      else if (mod && e.key === '0') { e.preventDefault(); setZoom(100); }
+      else if (e.key === 'F3') { e.preventDefault(); findNext(false); }
+      else if (e.key === 'Tab') { e.preventDefault(); area.setRangeText('\t', area.selectionStart, area.selectionEnd, 'end'); }
+    });
+    area.addEventListener('input', () => { if (!dirty) { dirty = true; title(); } bar(); });
+    ['keyup', 'click', 'select'].forEach(ev => area.addEventListener(ev, bar));
     loadFile();
+    setTimeout(() => area.focus(), 100);
   }
 });
 
@@ -278,6 +465,8 @@ Apps.register({
     win.body.innerHTML = `<div class="term-root"></div>`;
     const root = win.body.querySelector('.term-root');
     let cwd = HOME;
+    win._termCwd = HOME;
+    const termHist = [];
     const println = (s, color) => {
       const l = Utils.el('div', 't-line');
       l.textContent = s;
@@ -290,9 +479,23 @@ Apps.register({
       root.appendChild(row);
       const input = row.querySelector('input');
       input.focus();
+      let hIdx = termHist.length;
       input.addEventListener('keydown', e => {
+        if (e.key === 'ArrowUp') { e.preventDefault(); if (hIdx > 0) { hIdx--; input.value = termHist[hIdx] || ''; } return; }
+        if (e.key === 'ArrowDown') { e.preventDefault(); if (hIdx < termHist.length) { hIdx++; input.value = termHist[hIdx] || ''; } return; }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const parts = input.value.split(/\s+/), last = parts[parts.length - 1] || '';
+          const cmds = ['help', 'dir', 'ls', 'cd', 'type', 'cat', 'echo', 'mkdir', 'del', 'rm', 'tree', 'start', 'apps', 'cls', 'clear', 'ver', 'whoami', 'date', 'exit'].concat(Object.keys(FunCmds));
+          const pool = parts.length === 1 ? cmds : (parts[0] === 'start' ? Apps.visible().map(a => a.id) : FS.list(cwd).map(i => i.name));
+          const m = pool.filter(x => x.toLowerCase().startsWith(last.toLowerCase()));
+          if (m.length === 1) { parts[parts.length - 1] = m[0]; input.value = parts.join(' ') + (parts.length === 1 ? ' ' : ''); }
+          else if (m.length > 1) { const l = Utils.el('div', 't-line'); l.textContent = m.join('   '); root.insertBefore(l, row); root.scrollTop = root.scrollHeight; }
+          return;
+        }
         if (e.key !== 'Enter') return;
         const cmd = input.value;
+        if (cmd.trim() && termHist[termHist.length - 1] !== cmd) termHist.push(cmd);
         row.innerHTML = `<span>${Utils.esc(cwd.replace(/\//g, '\\'))}&gt; ${Utils.esc(cmd)}</span>`;
         run(cmd);
         promptLine();
@@ -315,7 +518,7 @@ Apps.register({
       if (!cmd) return;
       switch (cmd.toLowerCase()) {
         case 'help':
-          out('Available commands:\n  dir / ls        list directory\n  cd <dir>        change directory\n  type / cat <f>  print a file\n  echo <t> > <f>  write text to a file\n  mkdir <dir>     create directory\n  del / rm <f>    delete file or folder\n  tree            directory tree\n  start <app>     launch an app (e.g. start notepad)\n  apps            list app ids\n  cls / clear     clear screen\n  ver, whoami, date'); break;
+          out('Available commands:\n  dir / ls        list directory\n  cd <dir>        change directory\n  type / cat <f>  print a file\n  echo <t> > <f>  write text to a file\n  mkdir <dir>     create directory\n  del / rm <f>    delete file or folder\n  tree            directory tree\n  start <app>     launch an app (e.g. start notepad)\n  apps            list app ids\n  cls / clear     clear screen\n  ver, whoami, date\n\nFun stuff:\n  cowsay, fortune, neofetch, sl, clippy, screensaver [style],\n  party, bsod, achievements, hiscores, taskmgr, lock'); break;
         case 'dir': case 'ls': {
           const items = FS.list(resolve(arg));
           if (!FS.get(resolve(arg))) { print('The system cannot find the path specified.'); break; }
@@ -325,7 +528,7 @@ Apps.register({
         case 'cd': {
           if (!arg) { print(cwd.replace(/\//g, '\\')); break; }
           const t = resolve(arg), n = FS.get(t);
-          if (n && n.type === 'folder') cwd = t;
+          if (n && n.type === 'folder') { cwd = t; win._termCwd = t; }
           else print('The system cannot find the path specified.');
           break;
         }
@@ -361,11 +564,14 @@ Apps.register({
         case 'apps': Apps.visible().forEach(a => print('  ' + a.id.padEnd(14) + a.name)); break;
         case 'cls': case 'clear': root.innerHTML = ''; break;
         case 'ver': print('Windows 11 Web [Version 11.0.2026.728]'); break;
-        case 'whoami': print('desktop-web\\seefood'); break;
+        case 'whoami': print('desktop-web\\' + String(Settings.get('userName') || 'seefood').toLowerCase().replace(/\s+/g, '')); break;
         case 'date': print(new Date().toString()); break;
         case 'exit': win.close(); break;
-        default: print(`'${cmd}' is not recognized as an internal or external command. Type "help".`);
+        default:
+          if (Object.prototype.hasOwnProperty.call(FunCmds, cmd.toLowerCase())) { FunCmds[cmd.toLowerCase()](print, arg, win); break; }
+          print(`'${cmd}' is not recognized as an internal or external command. Type "help".`);
       }
+      Bus.emit('terminal:cmd', cmd);
     }
     const l1 = Utils.el('div', 't-line'); l1.textContent = 'Windows 11 Web [Version 11.0.2026.728]';
     const l2 = Utils.el('div', 't-line'); l2.textContent = '(c) A browser near you. Type "help" to get started.';
@@ -682,8 +888,8 @@ Apps.register({
     function save(forcePrompt) {
       let name = fileName;
       if (!name || forcePrompt) {
-        name = prompt('Save as (in Pictures):', name || 'Drawing');
-        if (!name) return;
+        FileDialog.show({ mode: 'save', dir: HOME + '/Pictures', name: (name || 'Drawing') + '.png', exts: ['.png'] }).then(p => { if (!p) return; fileName = p.split('/').pop().replace(/\.png$/i, ''); FS.write(p, cv.toDataURL('image/png'), 'image/png'); win.setTitle(fileName + '.png - Paint'); Shell.toast('Paint', 'Saved ' + p.split('/').pop(), '🎨'); });
+        return;
       }
       fileName = name.replace(/\.png$/i, '');
       FS.write(HOME + '/Pictures/' + fileName + '.png', cv.toDataURL('image/png'), 'image/png');
@@ -752,6 +958,8 @@ Apps.register({
       if (picsRoot) walk(HOME + '/Pictures', picsRoot);
       return out;
     }
+    let album = args.path ? args.path.split('/').slice(0, -1).join('/') : '';
+    if (album && !album.startsWith(HOME + '/Pictures/')) album = '';
     let viewing = args.path ? allImages().findIndex(i => i.path === args.path) : -1;
     if (args.path && viewing < 0) {
       const n = FS.get(args.path);
@@ -770,14 +978,19 @@ Apps.register({
           <div class="app-toolbar">
             <button class="pv-back">← All photos</button>
             <span style="font-size:12px;color:var(--text-2)">${Utils.esc(img.name)} (${viewing + 1} of ${imgs.length})</span>
-            <button class="pv-wall" style="margin-left:auto">🖼️ Set as wallpaper</button>
+            <button class="pv-rot" title="Rotate 90°" style="margin-left:auto">↻ Rotate</button>
+            <select class="pv-filter fluent-input" title="Filter"><option value="">No filter</option><option value="grayscale(1)">Noir</option><option value="sepia(.8)">Vintage</option><option value="saturate(2)">Vivid</option><option value="invert(1)">Negative</option><option value="blur(3px)">Dreamy</option></select>
+            <button class="pv-savecopy" title="Save a copy with the rotation and filter applied">💾 Save copy</button>
+            <button class="pv-slide" title="Slideshow">▶ Slideshow</button>
+            <button class="pv-wall">🖼️ Wallpaper</button>
+            <button class="pv-del" title="Delete">🗑️</button>
           </div>
           <div class="photo-viewer">
             <img src="${img.src}">
             <button class="pv-nav" style="left:12px">‹</button>
             <button class="pv-nav" style="right:12px">›</button>
           </div>`;
-        win.body.querySelector('.pv-back').addEventListener('click', () => { viewing = -1; render(); });
+        win.body.querySelector('.pv-back').addEventListener('click', () => { clearInterval(win._slide); win._slide = null; viewing = -1; render(); });
         const navs = win.body.querySelectorAll('.pv-nav');
         navs[0].addEventListener('click', () => { viewing = (viewing - 1 + imgs.length) % imgs.length; render(); });
         navs[1].addEventListener('click', () => { viewing = (viewing + 1) % imgs.length; render(); });
@@ -785,20 +998,49 @@ Apps.register({
           Settings.set('wallpaper', 'custom:' + img.src);
           Shell.toast('Photos', 'Wallpaper updated', '🖼️');
         });
+        const pic = win.body.querySelector('.photo-viewer img');
+        let rot = 0, filt = '';
+        const applyFx = () => { pic.style.transform = `rotate(${rot}deg)`; pic.style.filter = filt; };
+        win.body.querySelector('.pv-rot').addEventListener('click', () => { rot = (rot + 90) % 360; applyFx(); });
+        win.body.querySelector('.pv-filter').addEventListener('change', e => { filt = e.target.value; applyFx(); });
+        win.body.querySelector('.pv-savecopy').addEventListener('click', () => {
+          const c = document.createElement('canvas'); const w = pic.naturalWidth || 800, h = pic.naturalHeight || 600;
+          const swap = rot % 180 !== 0; c.width = swap ? h : w; c.height = swap ? w : h;
+          const ctx = c.getContext('2d'); ctx.filter = filt || 'none'; ctx.translate(c.width / 2, c.height / 2); ctx.rotate(rot * Math.PI / 180); ctx.drawImage(pic, -w / 2, -h / 2, w, h);
+          let data; try { data = c.toDataURL('image/png'); } catch (e) { Shell.toast('Photos', 'Couldn\'t export this image.', '⚠️'); return; }
+          if (data.length > 1.4 * 1048576) data = c.toDataURL('image/jpeg', .8);
+          const base = img.name.replace(/\.[^.]+$/, '') + ' (edited)';
+          const name = FS.uniqueName(HOME + '/Pictures', base, data.startsWith('data:image/png') ? '.png' : '.jpg');
+          FS.write(HOME + '/Pictures/' + name, data, data.startsWith('data:image/png') ? 'image/png' : 'image/jpeg');
+          Shell.toast('Photos', 'Saved ' + name, '💾');
+        });
+        let slide = null;
+        win.body.querySelector('.pv-slide').addEventListener('click', e => {
+          if (slide) { clearInterval(slide); slide = null; e.target.textContent = '▶ Slideshow'; return; }
+          e.target.textContent = '⏸ Stop'; if (!win.maxed) win.toggleMax();
+          slide = setInterval(() => { if (!win.body.isConnected) { clearInterval(slide); return; } viewing = (viewing + 1) % imgs.length; render(); }, 3000);
+          win._slide = slide;
+        });
+        if (win._slide && !slide) { slide = win._slide; win.body.querySelector('.pv-slide').textContent = '⏸ Stop'; win.body.querySelector('.pv-slide').addEventListener('click', () => { clearInterval(win._slide); win._slide = null; }, { once: true }); }
+        win.onClose(() => clearInterval(win._slide));
+        win.body.querySelector('.pv-del').addEventListener('click', () => { if (confirm('Move "' + img.name + '" to the Recycle Bin?')) { FS.recycle(img.path); viewing = -1; render(); } });
       } else {
         win.setTitle('Photos');
+        const albums = FS.list(HOME + '/Pictures').filter(f => f.node.type === 'folder').map(f => f.name);
+        const shown = allImages().map((img, i) => ({ img, i })).filter(x => !album || x.img.path.startsWith(album + '/'));
         win.body.innerHTML = `
           <div class="app-toolbar">
-            <span style="font-weight:600">All photos</span>
+            <div class="ph-albums"><button class="${album ? '' : 'sel'}" data-album="">All photos</button>${albums.map(a => `<button class="${album === HOME + '/Pictures/' + a ? 'sel' : ''}" data-album="${Utils.esc(HOME + '/Pictures/' + a)}">${Utils.esc(a)}</button>`).join('')}</div>
             <label class="tool-btn" style="margin-left:auto">⬆️ Import image<input type="file" accept="image/*" style="display:none"></label>
           </div>
-          <div class="photos-grid">${allImages().map((img, i) =>
+          <div class="photos-grid">${shown.map(({ img, i }) =>
             `<div class="ph-thumb" data-i="${i}"><img loading="lazy" src="${img.src}"><div class="ph-name">${Utils.esc(img.name)}</div></div>`).join('')
             || '<div class="placeholder-pane"><div class="ph-ico">🏞️</div>No photos yet. Import one!</div>'}</div>`;
         win.body.querySelector('.photos-grid').addEventListener('click', e => {
           const t = e.target.closest('.ph-thumb');
           if (t) { viewing = +t.dataset.i; render(); }
         });
+        win.body.querySelector('.ph-albums').addEventListener('click', e => { const b = e.target.closest('[data-album]'); if (b) { album = b.dataset.album; render(); } });
         win.body.querySelector('input[type=file]').addEventListener('change', e => {
           const f = e.target.files[0];
           if (!f) return;
@@ -848,16 +1090,20 @@ Apps.register({
     let media = null; // HTMLMediaElement for real files, else null (synth)
 
     function renderList() {
+      const mine = [];
+      const walk = (p, n) => { for (const [k, v] of Object.entries(n.children || {})) { if (v.type === 'folder') walk(p + '/' + k, v); else if (/\.(mp3|wav|ogg|m4a|webm|mp4|mov)$/i.test(k) && /^data:/.test(String(v.content))) mine.push({ path: p + '/' + k, name: k, video: /\.(webm|mp4|mov)$/i.test(k) }); } };
+      [HOME + '/Music', HOME + '/Videos', HOME + '/Downloads'].forEach(d => { const n = FS.get(d); if (n) walk(d, n); });
       $('.mp-list').innerHTML = Synth.tracks.map(t => `
         <div class="mp-track ${Synth.current && Synth.current.id === t.id ? 'playing' : ''}" data-id="${t.id}">
           <div class="mp-art" style="background:${t.color}">${t.art}</div>
           <div><div class="mp-t">${t.title}</div><div class="mp-a">${t.artist} • ${t.album}</div></div>
           <div class="mp-dur">${Utils.fmtTime(Synth.length(t))}</div>
-        </div>`).join('');
+        </div>`).join('') + (mine.length ? `<div class="mp-section">Your files</div>` + mine.map(f => `<div class="mp-track" data-path="${Utils.esc(f.path)}"><div class="mp-art" style="background:#444">${f.video ? '🎬' : '🎵'}</div><div><div class="mp-t">${Utils.esc(f.name)}</div><div class="mp-a">${Utils.esc(f.path.split('/').slice(-2, -1)[0])}</div></div></div>`).join('') : '');
     }
     $('.mp-list').addEventListener('click', e => {
       const row = e.target.closest('.mp-track');
       if (!row) return;
+      if (row.dataset.path) { win._mpOpenPath(row.dataset.path); return; }
       stopMedia();
       Synth.setQueue(Synth.tracks);
       Synth.play(Synth.tracks.find(t => t.id === row.dataset.id), 0);
@@ -926,7 +1172,7 @@ Apps.register({
       }
     }, 120);
     const onPlayer = () => renderList();
-    Bus.on('player:change', onPlayer);
+    win.on('player:change', onPlayer);
     win.onClose(() => { clearInterval(uiTimer); stopMedia(); });
     renderList();
     if (args.path) win._mpOpenPath(args.path);
@@ -937,58 +1183,168 @@ Apps.register({
 Apps.register({
   id: 'edge', name: 'Microsoft Edge', icon: '🌐', color: 'linear-gradient(135deg,#35d0c0,#0b6fbf)',
   category: 'System', width: 960, height: 620,
-  mount(win) {
+  onArgs(win, args) { if (args && args.url) win._edgeOpen(args.url); },
+  mount(win, args) {
+    // sites known to allow embedding — no "blank page?" banner for these
+    const FRIENDLY = /(^|\.)(example\.com|wikipedia\.org|wikimedia\.org|openstreetmap\.org|archive\.org|duckduckgo\.com|bing\.com|codepen\.io|jsfiddle\.net|w3schools\.com|mdn\.dev|developer\.mozilla\.org|neverssl\.com)$/i;
+    const DEFAULT_BM = [
+      { name: 'Wikipedia', url: 'https://en.wikipedia.org/wiki/Special:Random', ico: '📚' },
+      { name: 'Maps', url: 'https://www.openstreetmap.org/export/embed.html?bbox=-0.15,51.49,-0.09,51.52', ico: '🗺️' },
+      { name: 'Archive.org', url: 'https://archive.org', ico: '🏛️' },
+      { name: 'DuckDuckGo', url: 'https://duckduckgo.com/html/', ico: '🦆' },
+      { name: 'MDN', url: 'https://developer.mozilla.org/', ico: '📖' },
+      { name: 'Example', url: 'https://example.com', ico: '📄' }
+    ];
+    let bookmarks = Store.get('win11.edge.bookmarks', null) || DEFAULT_BM.slice();
+    const saveBm = () => Store.set('win11.edge.bookmarks', bookmarks);
+    const tabs = []; let cur = -1, seq = 0;
+    const proxyUrl = () => String(Settings.get('edgeProxy') || '').trim().replace(/\/+$/, '');
     win.body.innerHTML = `
       <div class="edge-root">
+        <div class="edge-tabs"><div class="edge-tablist"></div><button class="eg-newtab" title="New tab">+</button></div>
         <div class="edge-bar">
-          <button class="eg-back">←</button><button class="eg-fwd">→</button><button class="eg-reload">⟳</button><button class="eg-home">🏠</button>
-          <input class="eg-url" placeholder="Search or enter web address" spellcheck="false">
+          <button class="eg-back" title="Back">←</button><button class="eg-fwd" title="Forward">→</button><button class="eg-reload" title="Reload">⟳</button><button class="eg-home" title="Home">🏠</button>
+          <input class="eg-url" placeholder="Search or enter web address" spellcheck="false" autocomplete="off">
+          <button class="eg-star" title="Bookmark this page">☆</button>
+          <button class="eg-shield" title="Proxy off">🛡️</button>
+          <button class="eg-ext" title="Open in a new browser tab">↗</button>
         </div>
+        <div class="edge-bm"></div>
+        <div class="edge-banner" style="display:none"><span>Blank page? This site refuses to be embedded (that's the site's rule, not a bug).</span><button class="eb-ext">Open in new tab</button><button class="eb-proxy" style="display:none">Load via proxy</button><button class="eb-setup" style="display:none">Set up proxy…</button><button class="eb-x" title="Dismiss">✕</button></div>
         <div class="edge-view">
           <iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style="display:none"></iframe>
           <div class="edge-home">
             <h1>Where to next?</h1>
-            <div class="edge-tiles">
-              <div class="edge-tile" data-url="https://example.com"><div class="et-ico">📄</div><div class="et-name">Example</div></div>
-              <div class="edge-tile" data-url="https://www.openstreetmap.org/export/embed.html?bbox=-0.15,51.49,-0.09,51.52"><div class="et-ico">🗺️</div><div class="et-name">Maps</div></div>
-              <div class="edge-tile" data-url="https://en.wikipedia.org/wiki/Special:Random"><div class="et-ico">📚</div><div class="et-name">Wikipedia</div></div>
-              <div class="edge-tile" data-url="https://archive.org"><div class="et-ico">🏛️</div><div class="et-name">Archive.org</div></div>
-              <div class="edge-tile" data-url="https://duckduckgo.com/html/"><div class="et-ico">🦆</div><div class="et-name">DuckDuckGo</div></div>
-            </div>
-            <div class="edge-note">Heads-up: this browser-in-a-browser loads pages in an iframe, and many sites (Google, YouTube, Bing…) refuse to be embedded and will show a blank page. The tiles above usually work. That's a web security rule, not a bug. 🙂</div>
+            <div class="edge-search"><span>🔍</span><input placeholder="Search the web with DuckDuckGo" spellcheck="false"></div>
+            <div class="edge-tiles"></div>
+            <div class="edge-note"></div>
           </div>
         </div>
       </div>`;
     const $ = s => win.body.querySelector(s);
-    const frame = $('iframe'), home = $('.edge-home'), url = $('.eg-url');
-    const hist = []; let hIdx = -1;
+    const frame = $('iframe'), home = $('.edge-home'), url = $('.eg-url'), banner = $('.edge-banner');
+    const tab = () => tabs[cur];
+    const isProxy = u => proxyUrl() && u.startsWith(proxyUrl());
+    const unproxy = u => { if (!isProxy(u)) return u; try { return new URL(u).searchParams.get('url') || u; } catch (e) { return u; } };
+    const viaProxy = u => proxyUrl() ? proxyUrl() + '/?url=' + encodeURIComponent(u) : u;
+
+    function renderTabs() {
+      $('.edge-tablist').innerHTML = tabs.map((t, i) => `<div class="edge-tab ${i === cur ? 'sel' : ''}" data-i="${i}"><span class="et-fav">${t.url ? '🌐' : '✨'}</span><span class="et-title">${Utils.esc(t.title || 'New tab')}</span><button class="et-close" title="Close tab">✕</button></div>`).join('');
+      win.setTitle((tab() && tab().title ? tab().title + ' - ' : '') + 'Microsoft Edge');
+    }
+    function renderBm() {
+      $('.edge-bm').innerHTML = bookmarks.map((b, i) => `<button class="bm" data-i="${i}" title="${Utils.esc(b.url)}">${b.ico || '🔖'} ${Utils.esc(b.name)}</button>`).join('') || '<span class="bm-empty">Bookmarks you ☆ will show up here</span>';
+      $('.edge-tiles').innerHTML = bookmarks.slice(0, 8).map((b, i) => `<div class="edge-tile" data-i="${i}"><div class="et-ico">${b.ico || '🔖'}</div><div class="et-name">${Utils.esc(b.name)}</div></div>`).join('');
+      $('.edge-note').innerHTML = proxyUrl()
+        ? 'Pages load through your proxy, so most sites work. Logins and heavy web apps may still misbehave. Use 🛡️ to load a page directly instead.'
+        : 'Heads-up: this browser-in-a-browser loads pages in an iframe, and many sites (Google, YouTube, Reddit…) refuse to be embedded and show a blank page. The tiles above work. To make more sites load, set up the optional proxy in <b>Settings → System</b>.';
+      const t = tab();
+      $('.eg-star').textContent = t && t.url && bookmarks.some(b => b.url === t.url) ? '★' : '☆';
+    }
+    function showBanner(u) {
+      let host = ''; try { host = new URL(u).hostname; } catch (e) {}
+      const t = tab();
+      if (!u || t.direct === false || FRIENDLY.test(host) || t.dismissed === u) { banner.style.display = 'none'; return; }
+      banner.style.display = 'flex';
+      $('.eb-proxy').style.display = proxyUrl() ? '' : 'none';
+      $('.eb-setup').style.display = proxyUrl() ? 'none' : '';
+    }
+    function load(t) {
+      // t.url is the real page url; t.direct === false means "load through the proxy"
+      const useProxy = proxyUrl() && t.direct !== true;
+      t.direct = useProxy ? false : true;
+      $('.eg-shield').textContent = useProxy ? '🛡️' : '🔓';
+      $('.eg-shield').title = useProxy ? 'Loading via proxy — click to load directly' : (proxyUrl() ? 'Loading directly — click to use proxy' : 'No proxy configured (Settings → System)');
+      $('.eg-shield').classList.toggle('on', !!useProxy);
+      frame.src = useProxy ? viaProxy(t.url) : t.url;
+      home.style.display = 'none'; frame.style.display = 'block';
+      url.value = t.url;
+      try { t.title = new URL(t.url).hostname.replace(/^www\./, ''); } catch (e) { t.title = t.url; }
+      showBanner(useProxy ? '' : t.url);
+      renderTabs(); renderBm();
+    }
     function go(u, skipHist) {
       if (!u) return;
-      if (!/^https?:\/\//i.test(u)) {
-        u = /\.\w{2,}($|\/)/.test(u) ? 'https://' + u : 'https://duckduckgo.com/html/?q=' + encodeURIComponent(u);
-      }
-      if (!skipHist) { hist.splice(hIdx + 1); hist.push(u); hIdx = hist.length - 1; }
-      url.value = u;
-      home.style.display = 'none';
-      frame.style.display = 'block';
-      frame.src = u;
-      win.setTitle('Microsoft Edge');
+      u = u.trim();
+      if (!/^https?:\/\//i.test(u)) u = /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(u) ? 'https://' + u : 'https://duckduckgo.com/html/?q=' + encodeURIComponent(u);
+      const t = tab();
+      if (!skipHist) { t.hist.splice(t.hIdx + 1); t.hist.push(u); t.hIdx = t.hist.length - 1; }
+      t.url = u; t.direct = undefined;
+      load(t);
     }
     function goHome() {
-      frame.src = 'about:blank';
-      frame.style.display = 'none';
-      home.style.display = 'block';
-      url.value = '';
+      const t = tab();
+      t.url = ''; t.title = '';
+      frame.src = 'about:blank'; frame.style.display = 'none'; home.style.display = 'block';
+      url.value = ''; banner.style.display = 'none';
+      renderTabs(); renderBm();
+      setTimeout(() => $('.edge-search input').focus(), 50);
     }
-    url.addEventListener('keydown', e => { if (e.key === 'Enter') go(url.value.trim()); });
-    home.addEventListener('click', e => {
-      const t = e.target.closest('.edge-tile');
-      if (t) go(t.dataset.url);
+    function newTab(u) {
+      tabs.push({ id: ++seq, url: '', title: '', hist: [], hIdx: -1 });
+      cur = tabs.length - 1;
+      if (u) go(u); else goHome();
+    }
+    function switchTab(i) {
+      cur = i;
+      const t = tab();
+      if (t.url) load(t); else goHome();
+    }
+    function closeTab(i) {
+      tabs.splice(i, 1);
+      if (!tabs.length) { win.close(); return; }
+      switchTab(Math.min(i, tabs.length - 1));
+    }
+    // listen for the proxied page navigating: keep the address bar honest (same-origin only, so best-effort)
+    frame.addEventListener('load', () => {
+      try { const real = unproxy(frame.contentWindow.location.href); if (real && real !== 'about:blank' && tab()) { tab().url = real; url.value = real; } } catch (e) {}
+    });
+    win._edgeOpen = u => newTab(u);
+    url.addEventListener('keydown', e => { if (e.key === 'Enter') go(url.value); });
+    url.addEventListener('focus', () => url.select());
+    $('.edge-search input').addEventListener('keydown', e => { if (e.key === 'Enter') go(e.target.value); });
+    $('.edge-tiles').addEventListener('click', e => { const t = e.target.closest('.edge-tile'); if (t) go(bookmarks[+t.dataset.i].url); });
+    $('.edge-bm').addEventListener('click', e => { const b = e.target.closest('.bm'); if (b) go(bookmarks[+b.dataset.i].url); });
+    $('.edge-bm').addEventListener('contextmenu', e => {
+      const b = e.target.closest('.bm'); if (!b) return;
+      e.preventDefault();
+      const i = +b.dataset.i;
+      Shell.contextMenu(e.clientX, e.clientY, [
+        { label: 'Open', icon: '🌐', fn: () => go(bookmarks[i].url) },
+        { label: 'Open in new tab', icon: '➕', fn: () => newTab(bookmarks[i].url) },
+        { label: 'Rename', icon: '✏️', fn: () => { const n = prompt('Bookmark name:', bookmarks[i].name); if (n) { bookmarks[i].name = n.trim(); saveBm(); renderBm(); } } },
+        { sep: true },
+        { label: 'Delete', icon: '🗑️', fn: () => { bookmarks.splice(i, 1); saveBm(); renderBm(); } }
+      ]);
+    });
+    $('.edge-tabs').addEventListener('click', e => {
+      if (e.target.closest('.eg-newtab')) { newTab(); return; }
+      const t = e.target.closest('.edge-tab'); if (!t) return;
+      if (e.target.closest('.et-close')) closeTab(+t.dataset.i); else switchTab(+t.dataset.i);
     });
     $('.eg-home').addEventListener('click', goHome);
-    $('.eg-reload').addEventListener('click', () => { if (frame.style.display !== 'none') frame.src = frame.src; });
-    $('.eg-back').addEventListener('click', () => { if (hIdx > 0) { hIdx--; go(hist[hIdx], true); } else goHome(); });
-    $('.eg-fwd').addEventListener('click', () => { if (hIdx < hist.length - 1) { hIdx++; go(hist[hIdx], true); } });
+    $('.eg-reload').addEventListener('click', () => { if (tab().url) load(tab()); });
+    $('.eg-back').addEventListener('click', () => { const t = tab(); if (t.hIdx > 0) { t.hIdx--; t.url = t.hist[t.hIdx]; t.direct = undefined; load(t); } else goHome(); });
+    $('.eg-fwd').addEventListener('click', () => { const t = tab(); if (t.hIdx < t.hist.length - 1) { t.hIdx++; t.url = t.hist[t.hIdx]; t.direct = undefined; load(t); } });
+    $('.eg-star').addEventListener('click', () => {
+      const t = tab(); if (!t.url) return;
+      const i = bookmarks.findIndex(b => b.url === t.url);
+      if (i >= 0) bookmarks.splice(i, 1); else bookmarks.push({ name: t.title || t.url, url: t.url, ico: '🔖' });
+      saveBm(); renderBm();
+    });
+    $('.eg-shield').addEventListener('click', () => {
+      const t = tab(); if (!t.url) return;
+      if (!proxyUrl()) { Shell.toast('Microsoft Edge', 'No proxy configured. Add one under Settings → System → Edge web proxy.', '🛡️'); return; }
+      t.direct = t.direct === false ? true : undefined; t.dismissed = null; load(t);
+    });
+    const openExt = () => { const t = tab(); if (t.url) window.open(t.url, '_blank', 'noopener'); };
+    $('.eg-ext').addEventListener('click', openExt);
+    $('.eb-ext').addEventListener('click', openExt);
+    $('.eb-proxy').addEventListener('click', () => { const t = tab(); t.direct = undefined; load(t); });
+    $('.eb-setup').addEventListener('click', () => Apps.launch('settings', { section: 'system' }));
+    $('.eb-x').addEventListener('click', () => { tab().dismissed = tab().url; banner.style.display = 'none'; });
+    win.on('settings:edgeProxy', () => { if (win.body.isConnected) { renderBm(); if (tab() && tab().url) { tab().direct = undefined; tab().dismissed = null; load(tab()); } } });
+    newTab(args && args.url);
   }
 });
 
@@ -1002,7 +1358,7 @@ Apps.register({
         <div class="cop-msgs">
           <div class="cop-msg bot">Hi, I'm Copilot ✦ — your (extremely local) assistant. I can open apps ("open excel"), do math ("512*3+7"), tell a joke, switch dark mode, change the wallpaper, or tell you the time. Try me!</div>
         </div>
-        <div class="cop-input"><input placeholder="Ask me anything…" spellcheck="false"><button title="Send">➤</button></div>
+        <div class="cop-input"><input placeholder="Ask me anything…" spellcheck="false"><button class="cop-mic" title="Talk to Copilot">🎤</button><button class="cop-send" title="Send">➤</button></div>
       </div>`;
     const msgs = win.body.querySelector('.cop-msgs');
     const input = win.body.querySelector('input');
@@ -1022,6 +1378,16 @@ Apps.register({
     ];
     function respond(q) {
       const l = q.toLowerCase().trim();
+      const tm = l.match(/(?:set )?(?:a )?timer (?:for )?(.+)/);
+      if (tm && parseDuration(tm[1])) { const s = parseDuration(tm[1]); Timers.add(s, 'Timer (' + tm[1].trim() + ')'); return 'Timer set for ' + Utils.fmtTime(s) + '. I\'ll ring. ⏲️'; }
+      const rm = l.match(/remind me (?:to )?(.+?) at (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/);
+      if (rm) { let [h, m] = rm[2].replace(/\s*(am|pm)/, '').split(':').map(Number); m = m || 0; if (/pm/.test(rm[2]) && h < 12) h += 12; if (/am/.test(rm[2]) && h === 12) h = 0; const hm = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); const d = new Date(); if (hm <= d.toTimeString().slice(0, 5)) d.setDate(d.getDate() + 1); CalendarStore.add({ title: rm[1].replace(/^to /, ''), date: d.toISOString().slice(0, 10), time: hm, remind: true, color: '#0078d4' }); return 'Okay, I\'ll remind you to ' + rm[1].replace(/^to /, '') + ' at ' + hm + '. It\'s on your Calendar. 📅'; }
+      if (/flip a coin|heads or tails/.test(l)) return Math.random() < .5 ? 'Heads! 🪙' : 'Tails! 🪙';
+      const dice = l.match(/roll (?:a |the )?(?:(\d+) )?(?:d(\d+)|dice|die)/);
+      if (dice) { const n = +dice[1] || 1, sides = +dice[2] || 6; const r = Array.from({ length: Math.min(n, 10) }, () => 1 + Math.floor(Math.random() * sides)); return '🎲 ' + r.join(', ') + (r.length > 1 ? ' (total ' + r.reduce((a, b) => a + b, 0) + ')' : ''); }
+      if (/screenshot|snip|capture (the )?screen/.test(l)) { setTimeout(() => Snip.capture(), 800); return 'Say cheese. 📸 (Win+Shift+S does this too.)'; }
+      const of = l.match(/^(?:open|find|show)(?: the)?(?: file)? (.+\.\w{2,4})$/);
+      if (of) { let hit = null; const walk = (p, n) => { for (const [k, v] of Object.entries(n.children || {})) { if (hit) return; if (v.type === 'file' && k.toLowerCase() === of[1].trim()) hit = p + '/' + k; else if (v.type === 'folder') walk(p + '/' + k, v); } }; walk(HOME, FS.get(HOME)); if (hit) { openFile(hit); return 'Opening ' + hit.split('/').pop() + '. 📂'; } return 'I couldn\'t find a file called "' + of[1].trim() + '" in your home folder.'; }
       // open apps
       const openM = l.match(/^(?:open|launch|start|run)\s+(.+)$/);
       if (openM) {
@@ -1048,12 +1414,39 @@ Apps.register({
         Settings.set('wallpaper', next);
         return 'Switched the wallpaper to "' + Wallpapers.names[next] + '". 🖼️';
       }
-      if (/weather/.test(l)) {
-        if (Apps.isInstalled('weather')) { Apps.launch('weather'); return 'Here\'s the forecast for Webville!'; }
-        return 'Install MSN Weather from the Microsoft Store and I\'ll pull up the forecast for you.';
+      if (/clippy|paperclip|office assistant/.test(l)) { Clippy.toggle(); return Settings.get('clippy') ? 'Summoning Clippy. Don\'t say I didn\'t warn you. 📎' : 'Clippy has been sent back to 1997. 👋'; }
+      if (/party|confetti|celebrate|happy happy|joy joy/.test(l)) { Party.start(); return 'Happy happy, joy joy! 🎉'; }
+      if (/crash|bsod|blue screen|kernel panic/.test(l)) { setTimeout(() => BSOD.show('COPILOT_WAS_ASKED_NICELY'), 800); return 'You asked for it. Saving your work… just kidding. 💙'; }
+      if (/achievement|trophy|gamerscore/.test(l)) { Apps.launch('xbox'); return 'You\'ve earned ' + Achievements.score() + ' G so far. Here\'s the full list. 🏆'; }
+      if (/screensaver|screen saver/.test(l)) { setTimeout(() => Screensaver.start(), 600); return 'Starting the screensaver. Move the mouse to come back. 🫧'; }
+      if (/lock (the )?(pc|screen|computer)|^lock$/.test(l)) { setTimeout(() => Lock.show(), 400); return 'Locking. See you soon! 🔒'; }
+      if (/windows xp|luna|bliss/.test(l)) { Retro.set('xp'); return 'Welcome back to 2001. 🌄'; }
+      if (/windows 95|classic theme|retro/.test(l)) { Retro.set('95'); return 'It\'s 1995. The Microsoft Sound plays. 🖥️'; }
+      if (/modern theme|windows 11 theme|normal theme/.test(l)) { Retro.set(''); return 'Back to the future. 🪟'; }
+      if (/\b(e-?mail|outlook|inbox)\b/.test(l)) { Apps.launch('outlook'); return 'Opening Outlook. You have mail. Probably from Clippy. 📧'; }
+      if (/calendar|event|schedule|meeting|remind/.test(l)) { Apps.launch('calendar'); return 'Here\'s your Calendar. Double-click a day to add an event. 📅'; }
+      if (/record|voice memo|microphone/.test(l)) { Apps.launch('recorder'); return 'Voice Recorder is up. Testing, 1-2-3. 🎙️'; }
+      if (/update|patch/.test(l)) { Apps.launch('settings', { section: 'update' }); return 'Opening Windows Update. It\'s only a little bit fake. 🔄'; }
+      if (/^run\b|run dialog|win\s*\+\s*r/.test(l)) { setTimeout(() => RunDialog.open(), 300); return 'Win+R, at your service. ▶️'; }
+      if (/nearby|share (this|a) file|send to (my )?(other|phone|tab)/.test(l)) { Apps.launch('nearby'); return 'Nearby Share finds other tabs of this site in your browser. 📡'; }
+      if (/install (this|the) app|add to home/.test(l)) { Installer.install(); return 'Installing… 📲'; }
+      if (/task view|virtual desktop|new desktop/.test(l)) { TaskView.open(); return 'Here\'s Task View. Win+Tab gets you here too. 🗔'; }
+      if (/emoji/.test(l)) { setTimeout(() => EmojiPicker.toggle(), 300); return 'Win+. opens the emoji panel anywhere. Here you go. 😎'; }
+      if (/\bcat\b|neko|kitty/.test(l)) { if (!Apps.isInstalled('neko')) return 'Install Neko from the Microsoft Store and I\'ll let the cat out. 🐈'; Settings.set('neko', !Settings.get('neko')); return Settings.get('neko') ? 'Neko is loose! Move your mouse. 🐈' : 'Neko is back in her box. 📦'; }
+      if (/widget/.test(l)) { Widgets.toggle(); return 'Widgets, coming right up. 📰'; }
+      if (/task manager|processes|not responding/.test(l)) { Apps.launch('taskmgr'); return 'Here\'s Task Manager. Please don\'t end me. 📊'; }
+      if (/shortcut|hotkey|keyboard/.test(l)) return 'Hotkeys: Alt+Tab switches windows, Ctrl+Shift+Esc opens Task Manager, Ctrl+Esc opens Start, Win+D shows the desktop, Win+E opens Explorer. And there\'s a certain code from 1986…';
+      if (/weather|forecast|temperature|rain/.test(l)) {
+        const d = Weather.snapshot();
+        if (Apps.isInstalled('weather')) Apps.launch('weather');
+        if (d) return `${d.loc}: ${Weather.desc(d.now.code)[1].toLowerCase()}, ${Weather.fmt(d.now.temp)}${Weather.unit()} right now. ${Weather.desc(d.days[1].code)[0]} tomorrow, high ${Weather.fmt(d.days[1].hi)}.` + (Apps.isInstalled('weather') ? '' : ' Install MSN Weather from the Store for the full week.');
+        Weather.fetch().then(() => {});
+        return 'Fetching the forecast… ask me again in a second. 🌦️';
       }
+      if (/chess/.test(l)) { if (Apps.isInstalled('chess')) { Apps.launch('chess'); return 'Chess it is. I\'ll pretend not to know the engine\'s weaknesses. ♞'; } return 'Chess is in the Microsoft Store. Install it and I\'ll set up the board.'; }
+      if (/clipboard|copied/.test(l)) { setTimeout(() => ClipHistory.toggle(), 300); return 'Win+V opens clipboard history. Here it is. 📋'; }
       if (/who are you|what are you/.test(l)) return 'I\'m Copilot — well, a homage to it. I live entirely in this browser tab and I\'m powered by a handful of if-statements doing their absolute best.';
-      if (/help|what can you/.test(l)) return 'I can: open apps ("open paint"), calculate ("(84/2)*3"), tell jokes, toggle dark/light mode, change the wallpaper, show the weather, and tell you the time or date.';
+      if (/help|what can you/.test(l)) return 'I can: open apps and files ("open paint", "open Welcome.txt"), calculate, tell jokes, set timers and reminders, flip coins and roll dice, take a screenshot, report the real weather, switch themes ("Windows XP"), summon Clippy or Neko, start a party, open Task View, show achievements, lock the PC, run Windows Update, or crash it on request. Try the 🎤 to talk.';
       if (/thank/.test(l)) return 'Anytime! 💜';
       if (/^(hi|hello|hey|yo)\b/.test(l)) return 'Hey there! What can I do for you?';
       const fallback = [
@@ -1069,10 +1462,24 @@ Apps.register({
       input.value = '';
       add(q, 'me');
       const thinking = add('…', 'bot');
-      setTimeout(() => { thinking.textContent = respond(q); msgs.scrollTop = msgs.scrollHeight; }, 450 + Math.random() * 500);
+      setTimeout(() => { thinking.textContent = respond(q); msgs.scrollTop = msgs.scrollHeight; if (Settings.get('narrator') && typeof Narrator !== 'undefined') Narrator.say(thinking.textContent); }, 450 + Math.random() * 500);
     }
     input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
-    win.body.querySelector('.cop-input button').addEventListener('click', send);
+    win.body.querySelector('.cop-send').addEventListener('click', send);
+    const mic = win.body.querySelector('.cop-mic');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let rec = null;
+    mic.addEventListener('click', () => {
+      if (!SR) { Shell.toast('Copilot', 'Voice input needs a browser with the Web Speech API (Chrome or Edge).', '🎤'); return; }
+      if (rec) { rec.stop(); return; }
+      rec = new SR(); rec.lang = navigator.language || 'en-US'; rec.interimResults = true;
+      mic.classList.add('on'); input.placeholder = 'Listening…';
+      rec.onresult = e => { const t = [...e.results].map(r => r[0].transcript).join(''); input.value = t; if (e.results[e.results.length - 1].isFinal) { Achievements.unlock('voice'); send(); } };
+      rec.onerror = e => { Shell.toast('Copilot', 'Voice input failed: ' + e.error, '🎤'); };
+      rec.onend = () => { rec = null; mic.classList.remove('on'); input.placeholder = 'Ask me anything…'; };
+      try { rec.start(); } catch (e) { rec = null; mic.classList.remove('on'); }
+    });
+    win.onClose(() => { if (rec) rec.stop(); });
     setTimeout(() => input.focus(), 150);
   }
 });
@@ -1081,17 +1488,26 @@ Apps.register({
 Apps.register({
   id: 'settings', name: 'Settings', icon: '⚙️', color: 'linear-gradient(135deg,#9aa7b8,#5c6b7d)',
   category: 'System', width: 900, height: 600, singleton: true,
-  mount(win) {
+  onArgs(win, args) { if (args && args.section && win._setGo) win._setGo(args.section); },
+  mount(win, args) {
     const sections = {
       personalization: { icon: '🎨', name: 'Personalization' },
       system: { icon: '🖥️', name: 'System' },
       apps: { icon: '📦', name: 'Apps' },
+      accounts: { icon: '👤', name: 'Accounts' },
+      accessibility: { icon: '♿', name: 'Accessibility' },
+      fun: { icon: '🎉', name: 'Fun' },
+      gaming: { icon: '🎮', name: 'Gaming' },
+      update: { icon: '🔄', name: 'Windows Update' },
       about: { icon: 'ℹ️', name: 'About' }
     };
-    let sel = 'personalization';
-    win.body.innerHTML = `<div class="set-root"><div class="set-side"></div><div class="set-content"></div></div>`;
-    const side = win.body.querySelector('.set-side');
+    let sel = (args && args.section) || 'personalization';
+    win.body.innerHTML = `<div class="set-root"><div class="set-side"><input class="set-search fluent-input" placeholder="Find a setting" spellcheck="false"><div class="set-nav-list"></div><div class="set-results"></div></div><div class="set-content"></div></div>`;
+    const side = win.body.querySelector('.set-nav-list');
     const content = win.body.querySelector('.set-content');
+    const INDEX = [['Wallpaper / background', 'personalization'], ['Dark mode', 'personalization'], ['Accent color', 'personalization'], ['Taskbar alignment', 'personalization'], ['Visual style (XP, 95)', 'personalization'], ['Wallpaper slideshow', 'personalization'], ['Auto dark mode at sunset', 'personalization'], ['Storage', 'system'], ['Display', 'system'], ['System sounds', 'system'], ['Edge web proxy', 'system'], ['Reset this PC', 'system'], ['Installed apps / uninstall', 'apps'], ['Your name', 'accounts'], ['Avatar', 'accounts'], ['Narrator', 'accessibility'], ['Mouse pointer trails', 'accessibility'], ['Text size', 'accessibility'], ['High contrast', 'accessibility'], ['Emoji panel', 'accessibility'], ['Clippy / Office Assistant', 'fun'], ['Screensaver', 'fun'], ['Achievements', 'fun'], ['Party mode', 'fun'], ['Keyboard shortcuts', 'fun'], ['Xbox Game Bar', 'gaming'], ['FPS counter', 'gaming'], ['Game Mode', 'gaming'], ['High scores', 'gaming'], ['Check for updates', 'update'], ['Update history', 'update'], ['About / version', 'about'], ['Install as an app', 'about'], ['Credits', 'about']];
+    win.body.querySelector('.set-search').addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); const res = win.body.querySelector('.set-results'); if (!q) { res.innerHTML = ''; side.style.display = ''; return; } side.style.display = 'none'; const hits = INDEX.filter(([n, s]) => (n + ' ' + sections[s].name).toLowerCase().includes(q)); res.innerHTML = hits.map(([n, s]) => `<div class="set-nav" data-id="${s}"><span>${sections[s].icon}</span><span>${Utils.esc(n)}<br><small style="color:var(--text-2)">${sections[s].name}</small></span></div>`).join('') || '<div class="wg-sub" style="padding:8px">No matching settings.</div>'; });
+    win.body.querySelector('.set-results').addEventListener('click', e => { const n = e.target.closest('.set-nav'); if (n) { sel = n.dataset.id; renderSide(); renderContent(); } });
     function renderSide() {
       side.innerHTML = Object.entries(sections).map(([id, s]) =>
         `<div class="set-nav ${sel === id ? 'sel' : ''}" data-id="${id}"><span>${s.icon}</span><span>${s.name}</span></div>`).join('');
@@ -1110,7 +1526,11 @@ Apps.register({
           <div class="wall-grid" style="margin-bottom:18px">
             ${Wallpapers.ids.map(id => `<div class="wall-opt ${wp === id ? 'sel' : ''}" data-w="${id}" title="${Wallpapers.names[id]}" style="background-image:url('${Wallpapers.uri(id)}')"></div>`).join('')}
           </div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Wallpaper slideshow</div><div class="set-s">Cycle through the built-in wallpapers</div></div><select class="fluent-input" data-k="wallpaperSlide">${[0, 1, 5, 15, 60].map(m => `<option value="${m}" ${+Settings.get('wallpaperSlide') === m ? 'selected' : ''}>${m ? 'Every ' + m + ' min' : 'Off'}</option>`).join('')}</select></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Visual style</div><div class="set-s">Windows 11, or a trip down memory lane</div></div>
+            <select class="fluent-input" data-k="retro"><option value="" ${!Settings.get('retro') ? 'selected' : ''}>Windows 11</option><option value="xp" ${Settings.get('retro') === 'xp' ? 'selected' : ''}>Windows XP (Luna)</option><option value="95" ${Settings.get('retro') === '95' ? 'selected' : ''}>Windows 95 (Classic)</option></select></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Dark mode</div><div class="set-s">Switch between light and dark theme</div></div><div class="switch ${Settings.get('theme') === 'dark' ? 'on' : ''}" data-k="theme"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Auto dark mode</div><div class="set-s">Light by day, dark after sunset (uses the weather's sunrise/sunset when available)</div></div><div class="switch ${Settings.get('autoTheme') ? 'on' : ''}" data-k="autoTheme"></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Accent color</div><div class="set-s">Used across buttons and highlights</div></div></div>
           <div class="accent-row">${accents.map(a => `<div class="acc-opt ${Settings.get('accent') === a ? 'sel' : ''}" data-a="${a}" style="background:${a}"></div>`).join('')}</div>
           <div style="height:14px"></div>
@@ -1118,22 +1538,38 @@ Apps.register({
             <select class="fluent-input" data-k="taskbarAlign"><option value="center" ${Settings.get('taskbarAlign') === 'center' ? 'selected' : ''}>Center</option><option value="left" ${Settings.get('taskbarAlign') === 'left' ? 'selected' : ''}>Left</option></select></div>`;
         content.querySelectorAll('.wall-opt').forEach(w => w.addEventListener('click', () => { Settings.set('wallpaper', w.dataset.w); renderContent(); }));
         content.querySelectorAll('.acc-opt').forEach(a => a.addEventListener('click', () => { Settings.set('accent', a.dataset.a); renderContent(); }));
-        content.querySelector('.switch').addEventListener('click', () => { Settings.set('theme', Settings.get('theme') === 'dark' ? 'light' : 'dark'); renderContent(); });
-        content.querySelector('select').addEventListener('change', e => Settings.set('taskbarAlign', e.target.value));
+        content.querySelector('.switch[data-k=theme]').addEventListener('click', () => { Settings.set('theme', Settings.get('theme') === 'dark' ? 'light' : 'dark'); renderContent(); });
+        content.querySelector('.switch[data-k=autoTheme]').addEventListener('click', () => { Settings.set('autoTheme', !Settings.get('autoTheme')); renderContent(); });
+        content.querySelector('select[data-k=taskbarAlign]').addEventListener('change', e => Settings.set('taskbarAlign', e.target.value));
+        content.querySelector('select[data-k=retro]').addEventListener('change', e => { Retro.set(e.target.value); renderContent(); });
+        content.querySelector('select[data-k=wallpaperSlide]').addEventListener('change', e => Settings.set('wallpaperSlide', +e.target.value));
       } else if (sel === 'system') {
         let used = 0;
         try { used = (localStorage.getItem('win11.fs') || '').length + (localStorage.getItem('win11.settings') || '').length; } catch (e) {}
         content.innerHTML = `
           <h1>System</h1>
-          <div class="set-card"><div class="set-info"><div class="set-t">Storage</div><div class="set-s">${Utils.fmtBytes(used * 2)} used of ~5 MB browser storage</div></div></div>
+          <div class="set-card" style="flex-direction:column;align-items:stretch"><div class="set-info"><div class="set-t">Storage</div><div class="set-s">${Utils.fmtBytes(used * 2)} used of ~5 MB browser storage</div></div>
+            <div class="store-progress" style="margin:8px 0"><div style="width:${Math.min(100, used * 2 / 5242880 * 100)}%"></div></div>
+            ${(() => { const rows = []; const folderSize = n => { let s = 0; const walk = x => { for (const ch of Object.values(x.children || {})) ch.type === 'folder' ? walk(ch) : s += String(ch.content || '').length; }; walk(n); return s; }; FS.list(HOME).filter(f => f.node.type === 'folder').forEach(f => rows.push([f.name, folderSize(f.node) * 2])); let other = 0; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k !== 'win11.fs') other += (localStorage.getItem(k) || '').length * 2; } } catch (e) {} rows.push(['Settings, apps & saves', other]); const max = Math.max(1, ...rows.map(r => r[1])); return rows.sort((a, b) => b[1] - a[1]).map(([n, v]) => `<div class="stg-row"><span>${Utils.esc(n)}</span><div><div style="width:${v / max * 100}%"></div></div><b>${Utils.fmtBytes(v)}</b></div>`).join(''); })()}</div>
           <div class="set-card"><div class="set-info"><div class="set-t">Display</div><div class="set-s">${window.innerWidth} × ${window.innerHeight}, ${window.devicePixelRatio}x scaling</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">System sounds</div><div class="set-s">Notification chime, timer bells, UI blips</div></div><div class="switch ${Settings.get('sounds') !== false ? 'on' : ''}" id="snd-sw"></div><button class="fluent-btn subtle" id="snd-test">Test</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Edge web proxy</div><div class="set-s">Optional. A tiny Cloudflare Worker that lets Edge show sites that normally refuse to be embedded — see <code>proxy/README.md</code> in the repo. Leave empty to load pages directly.</div></div><input class="fluent-input" id="edge-proxy" style="width:260px" placeholder="https://….workers.dev" value="${Utils.esc(Settings.get('edgeProxy') || '')}"></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Reset this PC</div><div class="set-s">Wipes files, settings and installed apps, restores defaults</div></div><button class="fluent-btn" style="background:#c42b1c" id="reset-pc">Reset</button></div>`;
+        content.querySelector('#snd-sw').addEventListener('click', () => { Settings.set('sounds', Settings.get('sounds') === false); renderContent(); });
+        content.querySelector('#snd-test').addEventListener('click', () => Shell.toast('Sound test', 'This is what a notification sounds like.', '🔔'));
+        content.querySelector('#edge-proxy').addEventListener('change', e => {
+          const v = e.target.value.trim().replace(/\/+$/, '');
+          if (v && !/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/.test(v)) { Shell.toast('Settings', 'Proxy must be an https:// URL, e.g. https://name.workers.dev', '⚠️'); return; }
+          Settings.set('edgeProxy', v);
+          Shell.toast('Settings', v ? 'Edge will load pages through ' + v : 'Edge proxy removed.', '🛡️');
+        });
         content.querySelector('#reset-pc').addEventListener('click', () => {
           if (confirm('Reset Windows 11 Web? All your files and settings will be erased.')) {
             localStorage.removeItem('win11.fs');
             localStorage.removeItem('win11.settings');
             localStorage.removeItem('win11.chat');
             localStorage.removeItem('win11.apps');
+            ['win11.achievements', 'win11.stats', 'win11.hiscores', 'win11.todo', 'win11.sticky', 'win11.snake.hi', 'win11.welcomed', 'win11.emoji.recent'].forEach(k => localStorage.removeItem(k));
             location.reload();
           }
         });
@@ -1147,15 +1583,108 @@ Apps.register({
           Shell.toast('Settings', Apps.get(b.dataset.un).name + ' was uninstalled.', '📦');
           renderContent();
         }));
+      } else if (sel === 'accounts') {
+        const name = Settings.get('userName') || 'Seefood', av = Settings.get('avatar') || '';
+        content.innerHTML = `
+          <h1>Accounts</h1>
+          <div class="set-card"><div class="start-avatar" style="width:56px;height:56px;font-size:${av ? 30 : 24}px">${av || Utils.esc(name[0].toUpperCase())}</div><div class="set-info"><div class="set-t">${Utils.esc(name)}</div><div class="set-s">Local account • DESKTOP-WEB</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Your name</div><div class="set-s">Shown in the Start menu and on achievements</div></div><input class="fluent-input" id="acc-name" maxlength="24" value="${Utils.esc(name)}"></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Avatar</div><div class="set-s">Pick an emoji, or the first letter of your name</div></div></div>
+          <div class="accent-row">${Accounts.AVATARS.map(a => `<div class="acc-opt av-opt ${av === a ? 'sel' : ''}" data-av="${a}">${a || Utils.esc(name[0].toUpperCase())}</div>`).join('')}</div>
+          <div style="height:14px"></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Sign-in PIN</div><div class="set-s">${PinLock.enabled() ? 'A PIN is required on the lock screen (Windows Hello still works).' : 'Ask for a 4–8 digit PIN on the lock screen. Stored hashed, in this browser only.'}</div></div><button class="fluent-btn" id="pin-set">${PinLock.enabled() ? 'Change' : 'Set up'}</button>${PinLock.enabled() ? '<button class="fluent-btn subtle" id="pin-rm">Remove</button>' : ''}</div>`;
+        content.querySelector('#pin-set').addEventListener('click', () => { const a = prompt('New PIN (4–8 digits):'); if (a === null) return; if (!/^\d{4,8}$/.test(a)) { Shell.toast('Accounts', 'Use 4 to 8 digits.', '🔐'); return; } const b = prompt('Confirm PIN:'); if (b !== a) { Shell.toast('Accounts', 'PINs didn\'t match.', '🔐'); return; } PinLock.set(a).then(() => { Shell.toast('Accounts', 'PIN set. You\'ll need it on the lock screen.', '🔐'); renderContent(); }); });
+        const rm = content.querySelector('#pin-rm'); if (rm) rm.addEventListener('click', () => { PinLock.clear(); renderContent(); Shell.toast('Accounts', 'PIN removed.', '🔓'); });
+        content.querySelector('#acc-name').addEventListener('change', e => { const v = e.target.value.trim(); if (v) { Settings.set('userName', v); renderContent(); } });
+        content.querySelectorAll('.av-opt').forEach(a => a.addEventListener('click', () => { Settings.set('avatar', a.dataset.av); renderContent(); }));
+      } else if (sel === 'accessibility') {
+        content.innerHTML = `
+          <h1>Accessibility</h1>
+          <div class="set-card"><div class="set-info"><div class="set-t">Narrator</div><div class="set-s">Reads notifications and Clippy's tips aloud${'speechSynthesis' in window ? '' : ' (not supported in this browser)'}</div></div><div class="switch ${Settings.get('narrator') ? 'on' : ''}" data-k="narrator"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Mouse pointer trails</div><div class="set-s">The 1998 experience, in rainbow</div></div><div class="switch ${Settings.get('cursorTrail') ? 'on' : ''}" data-k="cursorTrail"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Text size</div><div class="set-s">Scales the whole desktop</div></div><select class="fluent-input" id="txt-scale">${[1, 1.1, 1.25, 1.5].map(z => `<option value="${z}" ${+Settings.get('textScale') === z ? 'selected' : ''}>${Math.round(z * 100)}%</option>`).join('')}</select></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">High contrast</div><div class="set-s">Black background, bright text, yellow highlights</div></div><div class="switch ${Settings.get('highContrast') ? 'on' : ''}" data-k="highContrast"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Emoji panel</div><div class="set-s">Press Win+. (or Win+;) in any text field</div></div><button class="fluent-btn subtle" id="emoji-try">Open</button></div>`;
+        content.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => { Settings.set(s.dataset.k, !Settings.get(s.dataset.k)); renderContent(); }));
+        content.querySelector('#emoji-try').addEventListener('click', () => setTimeout(() => EmojiPicker.toggle(), 50));
+        content.querySelector('#txt-scale').addEventListener('change', e => Settings.set('textScale', +e.target.value));
+      } else if (sel === 'gaming') {
+        const h = Store.get('win11.hiscores', {});
+        content.innerHTML = `
+          <h1>Gaming</h1>
+          <div class="set-card"><div class="set-info"><div class="set-t">Xbox Game Bar</div><div class="set-s">Press Win+G in any game for screenshots, FPS and achievements</div></div><button class="fluent-btn subtle" id="gb-open">Open</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">FPS counter</div><div class="set-s">Always-on frame counter in the corner</div></div><div class="switch ${Settings.get('fps') ? 'on' : ''}" id="fps-sw"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Game Mode</div><div class="set-s">Prioritizes games by politely asking other tabs to wait. (Does nothing. Feels good.)</div></div><div class="switch ${Settings.get('gameMode') ? 'on' : ''}" id="gm-sw"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Achievements</div><div class="set-s">${Achievements.score()} G • ${Object.keys(Achievements.unlocked()).length} of ${Achievements.list.length}</div></div><button class="fluent-btn" id="gm-ach">View</button></div>
+          <div class="set-card" style="flex-direction:column;align-items:stretch"><div class="set-info"><div class="set-t">High scores</div></div>${Object.keys(h).filter(k => h[k]).map(k => `<div class="stg-row"><span>${Utils.esc(k)}</span><div></div><b>${h[k]}</b></div>`).join('') || '<div class="set-s">No high scores yet.</div>'}</div>`;
+        content.querySelector('#gb-open').addEventListener('click', () => GameBar.toggle());
+        content.querySelector('#fps-sw').addEventListener('click', () => { Settings.set('fps', !Settings.get('fps')); renderContent(); });
+        content.querySelector('#gm-sw').addEventListener('click', () => { Settings.set('gameMode', !Settings.get('gameMode')); renderContent(); });
+        content.querySelector('#gm-ach').addEventListener('click', () => Apps.launch('xbox'));
+      } else if (sel === 'update') {
+        const st = WinUpdate.state();
+        const upToDate = st.installed && st.version === WinUpdate.VERSION;
+        content.innerHTML = `
+          <h1>Windows Update</h1>
+          <div class="set-card wu-card"><div class="wu-status">${upToDate ? '✅' : '🔄'}</div><div class="set-info"><div class="set-t wu-title">${upToDate ? 'You\'re up to date' : 'Updates may be available'}</div><div class="set-s wu-sub">${upToDate ? 'Last checked: just now' : 'Last checked: a while ago, honestly'}</div><div class="store-progress wu-bar" style="display:none;margin-top:8px"><div style="width:0%"></div></div></div><button class="fluent-btn wu-btn">${upToDate ? 'Check for updates' : 'Check for updates'}</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Update history</div><div class="set-s">${st.history.length ? st.history.map(h => `${h.kb} — ${Utils.esc(h.name)} — ${new Date(h.when).toLocaleDateString()}`).join('<br>') : 'No updates installed yet.'}</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Active hours</div><div class="set-s">We'll never restart you without asking. Unlike some operating systems.</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Tips & What's New</div><div class="set-s">See what the latest feature update added</div></div><button class="fluent-btn subtle" id="wu-notes">Open</button></div>`;
+        content.querySelector('#wu-notes').addEventListener('click', () => Apps.launch('whatsnew'));
+        const btn = content.querySelector('.wu-btn'), bar = content.querySelector('.wu-bar'), title = content.querySelector('.wu-title'), subEl = content.querySelector('.wu-sub'), ico = content.querySelector('.wu-status');
+        let phase = 'idle';
+        btn.addEventListener('click', () => {
+          if (phase === 'idle') {
+            phase = 'checking'; btn.disabled = true; title.textContent = 'Checking for updates…'; subEl.textContent = ''; ico.textContent = '🔍';
+            setTimeout(() => {
+              if (upToDate) { phase = 'idle'; btn.disabled = false; title.textContent = 'You\'re up to date'; subEl.textContent = 'Last checked: just now'; ico.textContent = '✅'; return; }
+              phase = 'available'; btn.disabled = false; btn.textContent = 'Download & install'; ico.textContent = '⬇️';
+              title.textContent = 'Windows 11 Web Feature Update ' + WinUpdate.VERSION + ' (' + WinUpdate.KB + ')';
+              subEl.textContent = 'Games, Clippy, virtual desktops, achievements and more. 0.0 GB.';
+            }, 1200 + Math.random() * 800);
+          } else if (phase === 'available') {
+            phase = 'downloading'; btn.disabled = true; bar.style.display = ''; ico.textContent = '⬇️';
+            let p = 0;
+            const t = setInterval(() => {
+              p = Math.min(100, p + 3 + Math.random() * 9);
+              bar.firstElementChild.style.width = p + '%';
+              subEl.textContent = (p < 60 ? 'Downloading' : 'Installing') + ' — ' + Math.floor(p) + '%';
+              if (p >= 100 || !content.isConnected) { clearInterval(t); if (!content.isConnected) return; phase = 'restart'; btn.disabled = false; btn.textContent = 'Restart now'; ico.textContent = '🔁'; title.textContent = 'Restart required'; subEl.textContent = 'Your device needs to restart to finish installing the update.'; Shell.toast('Windows Update', 'Restart required to finish installing ' + WinUpdate.KB + '.', '🔄'); }
+            }, 160);
+          } else if (phase === 'restart') WinUpdate.install();
+        });
+      } else if (sel === 'fun') {
+        const ss = Settings.get('screensaver'), mins = +Settings.get('screensaverMin') || 0;
+        content.innerHTML = `
+          <h1>Fun</h1>
+          <div class="set-card"><div class="set-info"><div class="set-t">Office Assistant (Clippy)</div><div class="set-s">A helpful paperclip that offers tips nobody asked for</div></div><div class="switch ${Settings.get('clippy') ? 'on' : ''}" data-k="clippy"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Screensaver</div><div class="set-s">Starts after a period of inactivity</div></div>
+            <select class="fluent-input" data-k="screensaver">${Object.entries(Screensaver.styles).map(([id, n]) => `<option value="${id}" ${ss === id ? 'selected' : ''}>${n}</option>`).join('')}</select>
+            <select class="fluent-input" data-k="screensaverMin">${[0, 1, 3, 5, 10, 30].map(m => `<option value="${m}" ${mins === m ? 'selected' : ''}>${m ? m + ' min' : 'Off'}</option>`).join('')}</select>
+            <button class="fluent-btn subtle" id="ss-preview">Preview</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Achievements</div><div class="set-s">${Achievements.score()} G of ${Achievements.total()} G earned</div></div><button class="fluent-btn" id="open-ach">View</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Party mode</div><div class="set-s">Confetti, rainbow accent, questionable music</div></div><button class="fluent-btn" id="party-btn">🎉 Party</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Keyboard shortcuts</div><div class="set-s">Alt+Tab switch windows • Ctrl+Shift+Esc Task Manager • Ctrl+Esc Start • Win+D desktop • Win+E Explorer • Win+I Settings</div></div></div>`;
+        content.querySelector('.switch').addEventListener('click', () => { Settings.set('clippy', !Settings.get('clippy')); renderContent(); });
+        content.querySelectorAll('select').forEach(s => s.addEventListener('change', e => Settings.set(e.target.dataset.k, e.target.dataset.k === 'screensaverMin' ? +e.target.value : e.target.value)));
+        content.querySelector('#ss-preview').addEventListener('click', () => setTimeout(() => Screensaver.start(), 250));
+        content.querySelector('#open-ach').addEventListener('click', () => Apps.launch('xbox'));
+        content.querySelector('#party-btn').addEventListener('click', () => Party.start());
       } else {
         content.innerHTML = `
           <h1>About</h1>
           <div class="set-card"><div class="set-info"><div class="set-t">Windows 11 Web</div><div class="set-s">Version 26H2 (Build 2026.728) — an affectionate, fully client-side replica.<br>Not affiliated with Microsoft. Everything runs locally in your browser tab.</div></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Device name</div><div class="set-s">DESKTOP-WEB</div></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Processor</div><div class="set-s">Your very own CPU, ${navigator.hardwareConcurrency || '?'} logical cores</div></div></div>
-          <div class="set-card"><div class="set-info"><div class="set-t">Installed RAM</div><div class="set-s">${navigator.deviceMemory ? navigator.deviceMemory + ' GB (as reported by the browser)' : 'Plenty'}</div></div></div>`;
+          <div class="set-card"><div class="set-info"><div class="set-t">Installed RAM</div><div class="set-s">${navigator.deviceMemory ? navigator.deviceMemory + ' GB (as reported by the browser)' : 'Plenty'}</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Install as an app</div><div class="set-s">${matchMedia('(display-mode: standalone)').matches ? 'Running as an installed app.' : 'Get a standalone window, offline support and a home-screen icon.'}</div></div><button class="fluent-btn" id="pwa-install" ${matchMedia('(display-mode: standalone)').matches ? 'disabled' : ''}>Install</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Apps</div><div class="set-s">${Apps.all().length} registered (${Apps.all().filter(a => a.store).length} in the Store) • ${Achievements.list.length} achievements • ${(() => { let n = 0; try { for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i).startsWith('win11.')) n++; } catch (e) {} return n; })()} storage keys</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Credits</div><div class="set-s">Vanilla HTML/CSS/JS, zero dependencies, no build step. Weather by Open-Meteo. Everything else is procedurally generated, lovingly fabricated, or both. Not affiliated with Microsoft.</div></div><button class="fluent-btn subtle" id="about-wn">What's new</button></div>`;
+        content.querySelector('#pwa-install').addEventListener('click', () => Installer.install());
+        content.querySelector('#about-wn').addEventListener('click', () => Apps.launch('whatsnew'));
       }
     }
+    win._setGo = id => { if (sections[id]) { sel = id; renderSide(); renderContent(); } };
     renderSide(); renderContent();
   }
 });

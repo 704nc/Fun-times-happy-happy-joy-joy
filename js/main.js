@@ -24,17 +24,20 @@
     const upd = () => {
       const now = new Date();
       lockEl.querySelector('.lock-time').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const info = lockEl.querySelector('.lock-info'); if (info && typeof LockInfo !== 'undefined') info.innerHTML = LockInfo.html();
       lockEl.querySelector('.lock-date').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
     };
     upd();
     const t = setInterval(upd, 15000);
     lockEl.style.display = 'flex';
+    if (typeof HelloSignIn !== 'undefined') HelloSignIn.attach(lockEl);
     const unlock = () => {
       clearInterval(t);
       document.removeEventListener('keydown', unlock);
       Synth.chime(); // user gesture → audio allowed
       lockEl.classList.add('unlocking');
       setTimeout(() => lockEl.remove(), 500);
+      Bus.emit('shell:unlock');
       if (!localStorage.getItem('win11.welcomed')) {
         localStorage.setItem('win11.welcomed', '1');
         setTimeout(() => {
@@ -42,8 +45,8 @@
         }, 900);
       }
     };
-    lockEl.addEventListener('click', unlock, { once: true });
-    document.addEventListener('keydown', unlock, { once: true });
+    if (typeof PinLock !== 'undefined') PinLock.gate(lockEl, unlock);
+    else { lockEl.addEventListener('click', unlock, { once: true }); document.addEventListener('keydown', unlock, { once: true }); }
   }
 
   const finish = () => {
