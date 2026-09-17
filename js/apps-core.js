@@ -1366,6 +1366,8 @@ Apps.register({
       if (/record|voice memo|microphone/.test(l)) { Apps.launch('recorder'); return 'Voice Recorder is up. Testing, 1-2-3. 🎙️'; }
       if (/update|patch/.test(l)) { Apps.launch('settings', { section: 'update' }); return 'Opening Windows Update. It\'s only a little bit fake. 🔄'; }
       if (/^run\b|run dialog|win\s*\+\s*r/.test(l)) { setTimeout(() => RunDialog.open(), 300); return 'Win+R, at your service. ▶️'; }
+      if (/nearby|share (this|a) file|send to (my )?(other|phone|tab)/.test(l)) { Apps.launch('nearby'); return 'Nearby Share finds other tabs of this site in your browser. 📡'; }
+      if (/install (this|the) app|add to home/.test(l)) { Installer.install(); return 'Installing… 📲'; }
       if (/task view|virtual desktop|new desktop/.test(l)) { TaskView.open(); return 'Here\'s Task View. Win+Tab gets you here too. 🗔'; }
       if (/emoji/.test(l)) { setTimeout(() => EmojiPicker.toggle(), 300); return 'Win+. opens the emoji panel anywhere. Here you go. 😎'; }
       if (/\bcat\b|neko|kitty/.test(l)) { if (!Apps.isInstalled('neko')) return 'Install Neko from the Microsoft Store and I\'ll let the cat out. 🐈'; Settings.set('neko', !Settings.get('neko')); return Settings.get('neko') ? 'Neko is loose! Move your mouse. 🐈' : 'Neko is back in her box. 📦'; }
@@ -1603,7 +1605,12 @@ Apps.register({
           <div class="set-card"><div class="set-info"><div class="set-t">Windows 11 Web</div><div class="set-s">Version 26H2 (Build 2026.728) — an affectionate, fully client-side replica.<br>Not affiliated with Microsoft. Everything runs locally in your browser tab.</div></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Device name</div><div class="set-s">DESKTOP-WEB</div></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Processor</div><div class="set-s">Your very own CPU, ${navigator.hardwareConcurrency || '?'} logical cores</div></div></div>
-          <div class="set-card"><div class="set-info"><div class="set-t">Installed RAM</div><div class="set-s">${navigator.deviceMemory ? navigator.deviceMemory + ' GB (as reported by the browser)' : 'Plenty'}</div></div></div>`;
+          <div class="set-card"><div class="set-info"><div class="set-t">Installed RAM</div><div class="set-s">${navigator.deviceMemory ? navigator.deviceMemory + ' GB (as reported by the browser)' : 'Plenty'}</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Install as an app</div><div class="set-s">${matchMedia('(display-mode: standalone)').matches ? 'Running as an installed app.' : 'Get a standalone window, offline support and a home-screen icon.'}</div></div><button class="fluent-btn" id="pwa-install" ${matchMedia('(display-mode: standalone)').matches ? 'disabled' : ''}>Install</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Apps</div><div class="set-s">${Apps.all().length} registered (${Apps.all().filter(a => a.store).length} in the Store) • ${Achievements.list.length} achievements • ${(() => { let n = 0; try { for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i).startsWith('win11.')) n++; } catch (e) {} return n; })()} storage keys</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Credits</div><div class="set-s">Vanilla HTML/CSS/JS, zero dependencies, no build step. Weather by Open-Meteo. Everything else is procedurally generated, lovingly fabricated, or both. Not affiliated with Microsoft.</div></div><button class="fluent-btn subtle" id="about-wn">What's new</button></div>`;
+        content.querySelector('#pwa-install').addEventListener('click', () => Installer.install());
+        content.querySelector('#about-wn').addEventListener('click', () => Apps.launch('whatsnew'));
       }
     }
     win._setGo = id => { if (sections[id]) { sel = id; renderSide(); renderContent(); } };

@@ -49,6 +49,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Desktop icons** drag anywhere and stay put; right-click → Auto arrange to reset. **Wallpaper slideshow** in Personalization. **Win + /** shows a keyboard-shortcut cheat sheet.
 - **Deep links** — `?app=terminal` (or any app id, plus `&path=`) opens it after sign-in; the PWA manifest ships shortcuts for Terminal, Store, Xbox and Camera.
 - **Snipping Tool** — Win+Shift+S captures the whole desktop (DOM → SVG → JPEG, no libraries) into Pictures › Screenshots; the app adds active-window capture and delays. Chrome/Edge.
+- **Nearby Share** — sends text and files between open tabs of the OS in the same browser (BroadcastChannel). **Ctrl+Alt+Del** shows the security screen. **Settings → About → Install** triggers the PWA install prompt.
 - **Real Open / Save As dialogs** — Notepad, Word, PowerPoint and Paint use a shared file dialog over the virtual drive (folders, new folder, extension picker) instead of prompts. Notepad and Word can print.
 - **Xbox Game Bar** — Win+G: FPS, screenshots, window capture, gamerscore, high scores. Settings → Gaming has an always-on FPS counter.
 - **3D Pipes** screensaver. Because.

@@ -1418,3 +1418,22 @@ html.saver .clippy-body, html.saver .neko { animation: none !important; }
 @keyframes pres-slide { from { transform: translateX(60px); opacity: 0 } }
 @keyframes pres-slide-back { from { transform: translateX(-60px); opacity: 0 } }
 @keyframes pres-zoom { from { transform: scale(.85); opacity: 0 } }
+
+/* ============ Link: nearby share, ctrl+alt+del ============ */
+.nb-root { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; height: 100%; overflow: auto; }
+.nb-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nb-me { font-size: 13px; background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 6px; padding: 8px 10px; }
+.nb-peer { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 6px 8px; border-radius: 5px; }
+.nb-peer:hover { background: var(--hover); }
+.nb-send { display: flex; flex-direction: column; gap: 8px; }
+.nb-text { height: 80px; resize: none; }
+.nb-item { background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 6px; padding: 10px 12px; font-size: 13px; margin-bottom: 8px; word-break: break-word; }
+.nb-item.read { opacity: .6; }
+.nb-item-h { display: flex; justify-content: space-between; margin-bottom: 4px; } .nb-item-h small { color: var(--text-2); }
+@media (max-width: 600px) { .nb-root { grid-template-columns: 1fr; } }
+#cad { position: fixed; inset: 0; z-index: 9760; background: radial-gradient(ellipse at 40% 40%, #2b5fc7, #0a1e52); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; animation: fade-in .2s; }
+.cad-list { display: flex; flex-direction: column; gap: 14px; }
+.cad-list button { border: none; background: transparent; color: #fff; font-size: 22px; text-align: left; padding: 6px 16px; border-radius: 4px; }
+.cad-list button:hover { background: rgba(255,255,255,.12); }
+.cad-foot { position: absolute; bottom: 40px; right: 50px; display: flex; gap: 14px; }
+.cad-foot button { border: 1px solid rgba(255,255,255,.5); background: rgba(0,0,0,.25); color: #fff; padding: 8px 20px; border-radius: 4px; font-size: 14px; }
