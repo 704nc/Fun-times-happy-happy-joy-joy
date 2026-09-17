@@ -1167,6 +1167,8 @@ Apps.register({
       if (/achievement|trophy|gamerscore/.test(l)) { Apps.launch('xbox'); return 'You\'ve earned ' + Achievements.score() + ' G so far. Here\'s the full list. 🏆'; }
       if (/screensaver|screen saver/.test(l)) { setTimeout(() => Screensaver.start(), 600); return 'Starting the screensaver. Move the mouse to come back. 🫧'; }
       if (/lock (the )?(pc|screen|computer)|^lock$/.test(l)) { setTimeout(() => Lock.show(), 400); return 'Locking. See you soon! 🔒'; }
+      if (/update|patch/.test(l)) { Apps.launch('settings', { section: 'update' }); return 'Opening Windows Update. It\'s only a little bit fake. 🔄'; }
+      if (/^run\b|run dialog|win\s*\+\s*r/.test(l)) { setTimeout(() => RunDialog.open(), 300); return 'Win+R, at your service. ▶️'; }
       if (/task view|virtual desktop|new desktop/.test(l)) { TaskView.open(); return 'Here\'s Task View. Win+Tab gets you here too. 🗔'; }
       if (/emoji/.test(l)) { setTimeout(() => EmojiPicker.toggle(), 300); return 'Win+. opens the emoji panel anywhere. Here you go. 😎'; }
       if (/\bcat\b|neko|kitty/.test(l)) { if (!Apps.isInstalled('neko')) return 'Install Neko from the Microsoft Store and I\'ll let the cat out. 🐈'; Settings.set('neko', !Settings.get('neko')); return Settings.get('neko') ? 'Neko is loose! Move your mouse. 🐈' : 'Neko is back in her box. 📦'; }
@@ -1215,6 +1217,7 @@ Apps.register({
       accounts: { icon: '👤', name: 'Accounts' },
       accessibility: { icon: '♿', name: 'Accessibility' },
       fun: { icon: '🎉', name: 'Fun' },
+      update: { icon: '🔄', name: 'Windows Update' },
       about: { icon: 'ℹ️', name: 'About' }
     };
     let sel = (args && args.section) || 'personalization';
@@ -1302,6 +1305,38 @@ Apps.register({
           <div class="set-card"><div class="set-info"><div class="set-t">Emoji panel</div><div class="set-s">Press Win+. (or Win+;) in any text field</div></div><button class="fluent-btn subtle" id="emoji-try">Open</button></div>`;
         content.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => { Settings.set(s.dataset.k, !Settings.get(s.dataset.k)); renderContent(); }));
         content.querySelector('#emoji-try').addEventListener('click', () => setTimeout(() => EmojiPicker.toggle(), 50));
+      } else if (sel === 'update') {
+        const st = WinUpdate.state();
+        const upToDate = st.installed && st.version === WinUpdate.VERSION;
+        content.innerHTML = `
+          <h1>Windows Update</h1>
+          <div class="set-card wu-card"><div class="wu-status">${upToDate ? '✅' : '🔄'}</div><div class="set-info"><div class="set-t wu-title">${upToDate ? 'You\'re up to date' : 'Updates may be available'}</div><div class="set-s wu-sub">${upToDate ? 'Last checked: just now' : 'Last checked: a while ago, honestly'}</div><div class="store-progress wu-bar" style="display:none;margin-top:8px"><div style="width:0%"></div></div></div><button class="fluent-btn wu-btn">${upToDate ? 'Check for updates' : 'Check for updates'}</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Update history</div><div class="set-s">${st.history.length ? st.history.map(h => `${h.kb} — ${Utils.esc(h.name)} — ${new Date(h.when).toLocaleDateString()}`).join('<br>') : 'No updates installed yet.'}</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Active hours</div><div class="set-s">We'll never restart you without asking. Unlike some operating systems.</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Tips & What's New</div><div class="set-s">See what the latest feature update added</div></div><button class="fluent-btn subtle" id="wu-notes">Open</button></div>`;
+        content.querySelector('#wu-notes').addEventListener('click', () => Apps.launch('whatsnew'));
+        const btn = content.querySelector('.wu-btn'), bar = content.querySelector('.wu-bar'), title = content.querySelector('.wu-title'), subEl = content.querySelector('.wu-sub'), ico = content.querySelector('.wu-status');
+        let phase = 'idle';
+        btn.addEventListener('click', () => {
+          if (phase === 'idle') {
+            phase = 'checking'; btn.disabled = true; title.textContent = 'Checking for updates…'; subEl.textContent = ''; ico.textContent = '🔍';
+            setTimeout(() => {
+              if (upToDate) { phase = 'idle'; btn.disabled = false; title.textContent = 'You\'re up to date'; subEl.textContent = 'Last checked: just now'; ico.textContent = '✅'; return; }
+              phase = 'available'; btn.disabled = false; btn.textContent = 'Download & install'; ico.textContent = '⬇️';
+              title.textContent = 'Windows 11 Web Feature Update ' + WinUpdate.VERSION + ' (' + WinUpdate.KB + ')';
+              subEl.textContent = 'Games, Clippy, virtual desktops, achievements and more. 0.0 GB.';
+            }, 1200 + Math.random() * 800);
+          } else if (phase === 'available') {
+            phase = 'downloading'; btn.disabled = true; bar.style.display = ''; ico.textContent = '⬇️';
+            let p = 0;
+            const t = setInterval(() => {
+              p = Math.min(100, p + 3 + Math.random() * 9);
+              bar.firstElementChild.style.width = p + '%';
+              subEl.textContent = (p < 60 ? 'Downloading' : 'Installing') + ' — ' + Math.floor(p) + '%';
+              if (p >= 100 || !content.isConnected) { clearInterval(t); if (!content.isConnected) return; phase = 'restart'; btn.disabled = false; btn.textContent = 'Restart now'; ico.textContent = '🔁'; title.textContent = 'Restart required'; subEl.textContent = 'Your device needs to restart to finish installing the update.'; Shell.toast('Windows Update', 'Restart required to finish installing ' + WinUpdate.KB + '.', '🔄'); }
+            }, 160);
+          } else if (phase === 'restart') WinUpdate.install();
+        });
       } else if (sel === 'fun') {
         const ss = Settings.get('screensaver'), mins = +Settings.get('screensaverMin') || 0;
         content.innerHTML = `

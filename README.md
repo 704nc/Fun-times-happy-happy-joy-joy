@@ -46,6 +46,9 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Neko** — a desktop cat from the Store that chases your mouse and naps when you stop. Pet her.
 - **Accounts & Accessibility** — rename yourself, pick an emoji avatar, turn on Narrator (reads toasts and Clippy aloud) or rainbow mouse trails.
 - **Matrix** screensaver, minimize/restore animations, and Task Manager knows about all of it.
+- **Run dialog** — Win+R. `calc`, `cmd`, `mspaint`, a path, a URL, `winver`, `regedit` (no).
+- **Windows Update** — Settings → Windows Update. Check, download, "Restart now", the blue "Working on updates" screen, a reboot, and a Tips & What's New app afterwards.
+- **Start search** — inline math (`12*12`), Settings pages, commands (lock, sleep, task view…), and a web-search fallback.
 - **Terminal extras** — `cowsay`, `fortune`, `neofetch`, `sl`, `clippy`, `screensaver [style]`, `party`, `achievements`, `hiscores`, `taskmgr`, `lock`.
 
 **Built-in apps — all functional:**
@@ -63,7 +66,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | Microsoft Edge | Browser-in-a-browser with tabs, bookmarks bar, history, search, and an honest "this site blocks embedding" banner. Deploy the optional proxy in [`proxy/`](proxy/README.md) (a 5-minute Cloudflare Worker) and Edge routes through it automatically so most sites load |
 | Notepad, Paint, Calculator, Terminal, Settings | The classics: Paint has shapes + flood fill and saves PNGs; Terminal has a real command set over the virtual FS (`help`); Settings does themes, wallpapers, accent colors, storage and Reset PC |
 
-**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper, Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. All uninstallable from the Store or Settings → Apps.
+**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper, Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. All uninstallable from the Store or Settings → Apps.
 
 ## Performance notes
 

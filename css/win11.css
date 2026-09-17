@@ -916,3 +916,34 @@ html.dark .edge-banner { background: #4a3f12; color: #ffe9a3; border-bottom-colo
 .edge-search input { flex: 1; border: none; background: transparent; color: var(--text); font-size: 15px; outline: none; }
 .edge-note code { background: var(--hover); padding: 1px 5px; border-radius: 3px; }
 @media (max-width: 640px) { .edge-tab { min-width: 40px; } .edge-banner span { font-size: 11px; } }
+
+/* ============ Extra: Tetris, Run dialog, Windows Update, What's new ============ */
+.tet-wrap { flex-direction: row; align-items: flex-start; gap: 14px; }
+.tet-side { width: 100px; display: flex; flex-direction: column; gap: 4px; }
+.tet-lbl { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; margin-top: 8px; }
+.tet-val { font-size: 20px; font-weight: 700; }
+.tet-hold, .tet-next { background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 6px; }
+.tet-touch { display: none; gap: 6px; margin-top: 8px; justify-content: center; }
+.tet-touch button { flex: 1; height: 40px; border: 1px solid var(--stroke); background: var(--card-solid); color: var(--text); border-radius: 6px; font-size: 16px; touch-action: manipulation; }
+@media (pointer: coarse) { .tet-touch { display: flex; } }
+@media (max-width: 560px) { .tet-wrap { flex-wrap: wrap; justify-content: center; } .tet-side { flex-direction: row; width: auto; gap: 10px; align-items: center; } .tet-next { display: none; } }
+.run-dialog { position: fixed; left: 24px; bottom: calc(var(--taskbar-h) + 24px); z-index: 9450; width: 420px; max-width: calc(100vw - 48px); background: var(--surface-solid); border: 1px solid var(--stroke); border-radius: 8px; box-shadow: var(--shadow); animation: win-restore .18s cubic-bezier(.2,.8,.2,1); }
+.run-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid var(--stroke); }
+.run-head .run-x { margin-left: auto; border: none; background: transparent; color: var(--text); font-size: 12px; padding: 4px 8px; border-radius: 4px; }
+.run-head .run-x:hover { background: #c42b1c; color: #fff; }
+.run-body { padding: 14px 16px; }
+.run-hint { font-size: 12px; color: var(--text-2); margin-bottom: 12px; }
+.run-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.run-row input { flex: 1; border: 1px solid var(--stroke); border-bottom: 1.5px solid var(--text-2); background: var(--card-solid); color: var(--text); border-radius: 5px; padding: 7px 10px; font-size: 13px; outline: none; }
+.run-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+#winupdate { position: fixed; inset: 0; z-index: 9992; background: #0b5cd5; color: #fff; display: flex; align-items: center; justify-content: center; text-align: center; }
+.wu-inner { display: flex; flex-direction: column; align-items: center; gap: 40px; }
+.wu-text { font-size: 22px; font-weight: 300; line-height: 1.5; }
+.wu-text small { font-size: 14px; opacity: .85; }
+.wu-card .wu-status { font-size: 30px; }
+.wn-root { flex: 1; overflow: auto; padding: 18px; }
+.wn-hero { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 10px; background: linear-gradient(135deg,#f6d365,#fda085); color: #3a2a00; margin-bottom: 16px; }
+.wn-hero h1 { font-size: 20px; font-weight: 600; }
+.wn-hero p { font-size: 13px; opacity: .85; }
+.wn-big { font-size: 44px; }
+.wn-ico { font-size: 24px; width: 36px; text-align: center; }
