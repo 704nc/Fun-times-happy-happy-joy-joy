@@ -247,6 +247,8 @@ Apps.register({
         <button class="np-new">New</button>
         <button class="np-save">Save</button>
         <button class="np-saveas">Save As…</button>
+        <button class="np-open">Open…</button>
+        <button class="np-print" title="Print (Ctrl+P)">🖨️</button>
         <button class="np-find" title="Find / Replace (Ctrl+H)">🔍 Find</button>
         <label class="np-wrap" title="Word wrap"><input type="checkbox" checked> Wrap</label>
         <button class="np-zoom-out" title="Zoom out (Ctrl+-)">−</button><span class="np-zoom">100%</span><button class="np-zoom-in" title="Zoom in (Ctrl++)">+</button>
@@ -262,16 +264,10 @@ Apps.register({
       if (path) { const n = FS.get(path); area.value = n ? String(n.content) : ''; }
       dirty = false; title(); bar();
     }
+    function writeOut() { FS.write(path, area.value, 'text/plain'); dirty = false; title(); status.textContent = 'Saved ✓'; setTimeout(() => status.textContent = '', 1600); }
     function save(as) {
-      if (!path || as) {
-        const name = prompt('Save as (in Documents):', path ? path.split('/').pop() : 'note.txt');
-        if (!name) return;
-        path = HOME + '/Documents/' + name;
-      }
-      FS.write(path, area.value, 'text/plain');
-      dirty = false; title();
-      status.textContent = 'Saved ✓';
-      setTimeout(() => status.textContent = '', 1600);
+      if (!path || as) { FileDialog.show({ mode: 'save', dir: path ? path.split('/').slice(0, -1).join('/') : HOME + '/Documents', name: path ? path.split('/').pop() : 'note.txt', exts: ['.txt', '.md', '.log', '.csv', '.json'] }).then(p => { if (p) { path = p; writeOut(); } }); return; }
+      writeOut();
     }
     function bar() {
       const v = area.value, pos = area.selectionStart;
@@ -294,6 +290,8 @@ Apps.register({
     $('.np-new').addEventListener('click', () => { if (dirty && !confirm('Discard unsaved changes?')) return; path = null; area.value = ''; loadFile(); });
     $('.np-save').addEventListener('click', () => save(false));
     $('.np-saveas').addEventListener('click', () => save(true));
+    $('.np-open').addEventListener('click', () => { FileDialog.show({ mode: 'open', dir: path ? path.split('/').slice(0, -1).join('/') : HOME + '/Documents', filter: /\.(txt|md|log|csv|json|js|css|html?|xml|ini|cfg)$/i }).then(p => { if (p) { path = p; loadFile(); } }); });
+    $('.np-print').addEventListener('click', () => Printer.print('<pre style="font:13px/1.5 Consolas,monospace;white-space:pre-wrap">' + Utils.esc(area.value) + '</pre>', path ? path.split('/').pop() : 'Untitled'));
     $('.np-find').addEventListener('click', () => { $('.np-findbar').style.display = ''; $('.np-q').focus(); $('.np-q').select(); });
     $('.np-findx').addEventListener('click', () => { $('.np-findbar').style.display = 'none'; area.focus(); });
     $('.np-next').addEventListener('click', () => findNext(false));
@@ -316,7 +314,9 @@ Apps.register({
     $('.np-zoom-out').addEventListener('click', () => setZoom(zoom - 10));
     area.addEventListener('keydown', e => {
       const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key === 's') { e.preventDefault(); save(false); }
+      if (mod && e.key === 's') { e.preventDefault(); save(e.shiftKey); }
+      else if (mod && e.key === 'o') { e.preventDefault(); $('.np-open').click(); }
+      else if (mod && e.key === 'p') { e.preventDefault(); $('.np-print').click(); }
       else if (mod && (e.key === 'h' || e.key === 'f')) { e.preventDefault(); $('.np-find').click(); }
       else if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); setZoom(zoom + 10); }
       else if (mod && e.key === '-') { e.preventDefault(); setZoom(zoom - 10); }
@@ -835,8 +835,8 @@ Apps.register({
     function save(forcePrompt) {
       let name = fileName;
       if (!name || forcePrompt) {
-        name = prompt('Save as (in Pictures):', name || 'Drawing');
-        if (!name) return;
+        FileDialog.show({ mode: 'save', dir: HOME + '/Pictures', name: (name || 'Drawing') + '.png', exts: ['.png'] }).then(p => { if (!p) return; fileName = p.split('/').pop().replace(/\.png$/i, ''); FS.write(p, cv.toDataURL('image/png'), 'image/png'); win.setTitle(fileName + '.png - Paint'); Shell.toast('Paint', 'Saved ' + p.split('/').pop(), '🎨'); });
+        return;
       }
       fileName = name.replace(/\.png$/i, '');
       FS.write(HOME + '/Pictures/' + fileName + '.png', cv.toDataURL('image/png'), 'image/png');

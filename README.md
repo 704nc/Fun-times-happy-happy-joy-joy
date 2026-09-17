@@ -49,6 +49,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Desktop icons** drag anywhere and stay put; right-click → Auto arrange to reset. **Wallpaper slideshow** in Personalization. **Win + /** shows a keyboard-shortcut cheat sheet.
 - **Deep links** — `?app=terminal` (or any app id, plus `&path=`) opens it after sign-in; the PWA manifest ships shortcuts for Terminal, Store, Xbox and Camera.
 - **Snipping Tool** — Win+Shift+S captures the whole desktop (DOM → SVG → JPEG, no libraries) into Pictures › Screenshots; the app adds active-window capture and delays. Chrome/Edge.
+- **Real Open / Save As dialogs** — Notepad, Word, PowerPoint and Paint use a shared file dialog over the virtual drive (folders, new folder, extension picker) instead of prompts. Notepad and Word can print.
 - **Xbox Game Bar** — Win+G: FPS, screenshots, window capture, gamerscore, high scores. Settings → Gaming has an always-on FPS counter.
 - **3D Pipes** screensaver. Because.
 - **Windows Hello** — "Sign in with your face" on the lock screen uses your real camera; the recognition is pure theatre.
@@ -75,9 +76,9 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 |---|---|
 | MSN Weather | **Real** 7-day forecast from Open-Meteo (no key) for any city or your GPS location, °F/°C. Feeds the taskbar, the Widgets panel and Copilot. Offline it falls back to a deterministic Webville forecast |
 | File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out. List/grid views, sort, in-folder search, Properties, Copy/Cut/Paste (Ctrl+C/X/V), Open with…, **Compress to ZIP** (a real archive you can download) and **Extract all** (STORE and DEFLATE) |
-| Word | Rich-text editing (bold/italic/lists/headings/colors), word count, saves `.doc` files to Documents |
-| Excel | Real formula engine — `=SUM(A1:A5)`, `AVG`, `MIN`, `MAX`, `COUNT`, arithmetic, cell references, circular-ref detection; bar/line/pie charts from a range; saves `.xls` |
-| PowerPoint | Slide editor with thumbnails + full-screen Present mode (arrow keys); saves `.ppt` |
+| Word | Rich-text editing (bold/italic/lists/headings/quotes/colors/fonts/sizes), pictures from your Pictures folder, tables, find, page & word count, print, export to .txt/.html/.md, Open/Save As dialogs; saves `.doc` |
+| Excel | Real formula engine — `=SUM(A1:A5)`, `AVG`, `MIN`, `MAX`, `COUNT`, arithmetic, cell references, circular-ref detection; `ROUND`/`ABS`/`SQRT`/`POWER`/`MOD`/`INT`/`MEDIAN`/`PRODUCT`/`IF` with comparisons, bold/currency/percent/decimal formatting, bar/line/pie charts from a range, CSV export; saves `.xls` |
+| PowerPoint | Slide editor with thumbnails, six themes, pictures on slides, speaker notes, duplicate/reorder, fade/slide/zoom transitions, full-screen Present mode (arrows, B for black, timer), outline export; saves `.ppt` |
 | Photos | Gallery of the virtual Pictures folder, viewer with next/prev, rotate, filters, save-a-copy, slideshow, delete, import your own images, set-as-wallpaper |
 | Media Player | Plays the built-in music library (synthesized live via WebAudio), plus any audio/video file you open from disk; seek bar + visualizer |
 | Spotify | Full clone UI — albums, search, library, queue, working play/pause/next/seek/volume, Liked Songs and your own playlists (right-click a track). Every track is procedurally composed and actually plays |
