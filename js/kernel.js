@@ -63,7 +63,9 @@ const Settings = {
     sounds: true,
     textScale: 1,
     highContrast: false,
-    wallpaperSlide: 0
+    wallpaperSlide: 0,
+    dnd: false,
+    saver: false
   },
   load() {
     try { this._data = Object.assign({}, this._defaults, JSON.parse(localStorage.getItem(this._key) || '{}')); }

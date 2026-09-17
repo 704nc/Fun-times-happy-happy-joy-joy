@@ -30,6 +30,7 @@
     upd();
     const t = setInterval(upd, 15000);
     lockEl.style.display = 'flex';
+    if (typeof HelloSignIn !== 'undefined') HelloSignIn.attach(lockEl);
     const unlock = () => {
       clearInterval(t);
       document.removeEventListener('keydown', unlock);

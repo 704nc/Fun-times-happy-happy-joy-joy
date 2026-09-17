@@ -1317,3 +1317,25 @@ html.hc .switch.on { background: #ffff00; } html.hc .switch.on::after { backgrou
 .stg-row > div { flex: 1; height: 8px; background: var(--hover); border-radius: 4px; overflow: hidden; }
 .stg-row > div > div { height: 100%; background: var(--accent); }
 .stg-row b { width: 70px; text-align: right; font-weight: 500; }
+
+/* ============ Nova: voice typing, saver, stocks, hello ============ */
+.voice-pill { position: fixed; left: 50%; bottom: calc(var(--taskbar-h) + 16px); transform: translateX(-50%); z-index: 9450; background: var(--surface-solid); border: 1px solid var(--stroke); border-radius: 20px; padding: 8px 14px; display: flex; align-items: center; gap: 10px; font-size: 13px; box-shadow: var(--shadow); }
+.voice-pill button { border: none; background: var(--accent); color: #fff; border-radius: 12px; padding: 3px 10px; font-size: 12px; }
+.vp-dot { width: 10px; height: 10px; border-radius: 50%; background: #c42b1c; animation: rec-pulse 1s infinite; }
+html.saver *, html.saver *::before, html.saver *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
+html.saver #taskbar, html.saver .shell-flyout, html.saver .win { backdrop-filter: none !important; }
+html.saver .clippy-body, html.saver .neko { animation: none !important; }
+.wg-stock { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--stroke); font-size: 12px; }
+.wg-stock:last-child { border-bottom: none; }
+.wg-stock > div:first-child { width: 110px; display: flex; flex-direction: column; }
+.wg-stock small { color: var(--text-2); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wg-stock canvas { flex: none; }
+.wg-stock-p { margin-left: auto; text-align: right; display: flex; flex-direction: column; }
+.wg-stock-p .up { color: #0f7b0f; } .wg-stock-p .down { color: #c42b1c; }
+.hello-btn { position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%); border: 1px solid rgba(255,255,255,.5); background: rgba(0,0,0,.3); color: #fff; border-radius: 20px; padding: 8px 16px; font-size: 13px; backdrop-filter: blur(10px); }
+.hello-btn:hover { background: rgba(0,0,0,.45); }
+.hello-btn:disabled { opacity: .5; }
+.hello-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 12px; background: rgba(0,0,0,.45); padding: 20px; border-radius: 16px; backdrop-filter: blur(16px); }
+.hello-box video { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; transform: scaleX(-1); border: 3px solid rgba(255,255,255,.6); }
+.hello-box.ok video { border-color: #3ddc84; box-shadow: 0 0 0 6px rgba(61,220,132,.3); }
+.hello-msg { font-size: 15px; color: #fff; }

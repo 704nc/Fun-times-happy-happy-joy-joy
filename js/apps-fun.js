@@ -435,6 +435,7 @@ const Lock = {
     upd();
     const t = setInterval(upd, 15000);
     document.body.appendChild(el);
+    if (typeof HelloSignIn !== 'undefined') HelloSignIn.attach(el);
     Shell.closeFlyouts();
     const unlock = () => {
       clearInterval(t);
