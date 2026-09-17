@@ -184,27 +184,54 @@ Apps.register({
     const OPEN_WITH = [['notepad', 'Notepad'], ['word', 'Word'], ['paint', 'Paint'], ['photos', 'Photos'], ['mediaplayer', 'Media Player'], ['edge', 'Microsoft Edge']];
     function pasteHere() {
       const cb = FS._clip; if (!cb) return;
-      const ok = cb.cut ? FS.move(cb.path, cwd) : FS.copy(cb.path, cwd);
+      const paths = cb.paths || [cb.path];
+      const ok = paths.map(p => cb.cut ? FS.move(p, cwd) : FS.copy(p, cwd)).some(Boolean);
       if (ok) { Achievements.unlock('organizer'); if (cb.cut) FS._clip = null; } else Shell.toast('File Explorer', 'Can\'t paste that here.', '⚠️');
     }
     win.body.addEventListener('keydown', e => {
       if (!(e.ctrlKey || e.metaKey) || e.target.matches('input')) return;
-      if (e.key === 'c' && selected) FS._clip = { path: cwd + '/' + selected, cut: false };
-      else if (e.key === 'x' && selected) FS._clip = { path: cwd + '/' + selected, cut: true };
+      if (e.key === 'c' && selSet.length) FS._clip = { path: cwd + '/' + selSet[0], paths: selSet.map(n => cwd + '/' + n), cut: false };
+      else if (e.key === 'x' && selSet.length) FS._clip = { path: cwd + '/' + selSet[0], paths: selSet.map(n => cwd + '/' + n), cut: true };
       else if (e.key === 'v') pasteHere();
       else return;
       e.preventDefault();
     });
+    let selSet = [], anchor = null;
+    const applySel = () => { files.querySelectorAll('.fx-item').forEach(x => x.classList.toggle('sel', selSet.includes(x.dataset.n))); selected = selSet.length ? selSet[selSet.length - 1] : null; renderPreview(); $('.fx-status').textContent = $('.fx-status').textContent.replace(/ • .*$/, '') + (selSet.length > 1 ? ' • ' + selSet.length + ' selected' : selected ? ' • ' + selected + ' selected' : ''); };
     files.addEventListener('click', e => {
       const it = e.target.closest('.fx-item');
+      if (e.target.matches('input.fx-rename')) return;
       files.focus();
-      files.querySelectorAll('.fx-item').forEach(x => x.classList.remove('sel'));
-      selected = it ? it.dataset.n : null;
-      renderPreview();
-      if (it) {
-        it.classList.add('sel');
-        if (TOUCH && !inBin()) openFile(cwd + '/' + it.dataset.n);
-      }
+      const names = [...files.querySelectorAll('.fx-item')].map(x => x.dataset.n);
+      if (!it) { selSet = []; applySel(); return; }
+      if (e.ctrlKey || e.metaKey) { selSet = selSet.includes(it.dataset.n) ? selSet.filter(n => n !== it.dataset.n) : selSet.concat([it.dataset.n]); anchor = it.dataset.n; }
+      else if (e.shiftKey && anchor && names.includes(anchor)) { const a = names.indexOf(anchor), b2 = names.indexOf(it.dataset.n); selSet = names.slice(Math.min(a, b2), Math.max(a, b2) + 1); }
+      else { selSet = [it.dataset.n]; anchor = it.dataset.n; }
+      applySel();
+      if (it && !e.ctrlKey && !e.shiftKey && TOUCH && !inBin()) openFile(cwd + '/' + it.dataset.n);
+    });
+    function renameInline(name) {
+      const it = files.querySelector(`.fx-item[data-n="${CSS.escape(name)}"]`); if (!it) return;
+      const label = it.querySelector('.fx-name');
+      const inp = Utils.el('input', 'fx-rename'); inp.value = name; label.replaceWith(inp);
+      const dot = name.lastIndexOf('.'); inp.focus(); inp.setSelectionRange(0, dot > 0 ? dot : name.length);
+      let doneR = false;
+      const finish = ok => { if (doneR) return; doneR = true; const v = inp.value.trim(); if (ok && v && v !== name) { if (!FS.rename(cwd + '/' + name, v)) { Shell.toast('File Explorer', 'That name is invalid or already exists.', '⚠️'); render(); } else { selSet = [v]; } } else render(); };
+      inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); });
+      inp.addEventListener('blur', () => finish(true));
+      inp.addEventListener('click', e => e.stopPropagation());
+      inp.addEventListener('dblclick', e => e.stopPropagation());
+    }
+    files.addEventListener('keydown', e => {
+      if (e.target.matches('input')) return;
+      const names = [...files.querySelectorAll('.fx-item')].map(x => x.dataset.n);
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') { e.preventDefault(); selSet = names.slice(); applySel(); }
+      else if (e.key === 'Delete' && selSet.length) { e.preventDefault(); if (inBin()) { if (confirm('Permanently delete ' + selSet.length + ' item(s)?')) selSet.forEach(n => FS.remove(cwd + '/' + n)); } else selSet.forEach(n => FS.recycle(cwd + '/' + n)); selSet = []; }
+      else if (e.key === 'F2' && selected) { e.preventDefault(); renameInline(selected); }
+      else if (e.key === 'Enter' && selected && !inBin()) { e.preventDefault(); openFile(cwd + '/' + selected); }
+      else if (e.key === 'Backspace' && !e.ctrlKey) { e.preventDefault(); $('.fx-up').click(); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); const i = names.indexOf(selected); const n = names[Math.min(names.length - 1, i + 1)]; if (n) { selSet = [n]; anchor = n; applySel(); } }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); const i = names.indexOf(selected); const n = names[Math.max(0, i - 1)]; if (n) { selSet = [n]; anchor = n; applySel(); } }
     });
     files.addEventListener('dblclick', e => {
       const it = e.target.closest('.fx-item');
@@ -232,12 +259,11 @@ Apps.register({
         if (/\.zip$/i.test(it.dataset.n)) items.splice(1, 0, { label: 'Extract all…', icon: '📂', fn: () => Zip.extract(p, p.replace(/\.zip$/i, '')).then(n => Shell.toast('File Explorer', 'Extracted ' + n + ' file(s) to ' + p.split('/').pop().replace(/\.zip$/i, ''), '🗜️')).catch(err => Shell.toast('File Explorer', 'Couldn\'t extract: ' + err.message, '⚠️')) });
         else items.splice(items.findIndex(x => x.label === 'Rename'), 0, { label: 'Compress to ZIP file', icon: '🗜️', fn: () => Zip.compress(p).then(r => Shell.toast('File Explorer', r.name + ' created (' + r.count + ' files, ' + Utils.fmtBytes(r.size) + ') and downloaded.', '🗜️')).catch(err => Shell.toast('File Explorer', 'Couldn\'t compress: ' + err.message, '⚠️')) });
         if (FS.get(p) && FS.get(p).type === 'file') items.splice(1, 0, { label: 'Open with…', icon: '🧩', fn: () => setTimeout(() => Shell.contextMenu(e.clientX + 20, e.clientY + 10, OPEN_WITH.filter(([id]) => Apps.isInstalled(id)).map(([id, n]) => ({ label: n, icon: Apps.get(id).letter ? '' : Apps.get(id).icon, fn: () => Apps.launch(id, id === 'edge' ? { url: FS.get(p).content } : { path: p }) }))), 0) });
-        items.splice(items.findIndex(x => x.label === 'Rename'), 0, { label: 'Copy', icon: '📋', fn: () => { FS._clip = { path: p, cut: false }; } }, { label: 'Cut', icon: '✂️', fn: () => { FS._clip = { path: p, cut: true }; } });
+        const group = selSet.includes(it.dataset.n) && selSet.length > 1 ? selSet.map(n => cwd + '/' + n) : [p];
+        items.splice(items.findIndex(x => x.label === 'Rename'), 0, { label: 'Copy' + (group.length > 1 ? ' ' + group.length + ' items' : ''), icon: '📋', fn: () => { FS._clip = { path: p, paths: group, cut: false }; } }, { label: 'Cut' + (group.length > 1 ? ' ' + group.length + ' items' : ''), icon: '✂️', fn: () => { FS._clip = { path: p, paths: group, cut: true }; } });
+        if (group.length > 1) { const d = items.findIndex(x => x.label === 'Delete'); if (d >= 0) items[d] = { label: 'Delete ' + group.length + ' items', icon: '🗑️', fn: () => group.forEach(g => FS.recycle(g)) }; }
         items.push(
-          { label: 'Rename', icon: '✏️', fn: () => {
-            const n = prompt('Rename to:', it.dataset.n);
-            if (n) FS.rename(p, n);
-          } },
+          { label: 'Rename', icon: '✏️', fn: () => { selSet = [it.dataset.n]; applySel(); renameInline(it.dataset.n); } },
           { sep: true },
           { label: 'Delete', icon: '🗑️', fn: () => FS.recycle(p) }
         );
@@ -1064,16 +1090,20 @@ Apps.register({
     let media = null; // HTMLMediaElement for real files, else null (synth)
 
     function renderList() {
+      const mine = [];
+      const walk = (p, n) => { for (const [k, v] of Object.entries(n.children || {})) { if (v.type === 'folder') walk(p + '/' + k, v); else if (/\.(mp3|wav|ogg|m4a|webm|mp4|mov)$/i.test(k) && /^data:/.test(String(v.content))) mine.push({ path: p + '/' + k, name: k, video: /\.(webm|mp4|mov)$/i.test(k) }); } };
+      [HOME + '/Music', HOME + '/Videos', HOME + '/Downloads'].forEach(d => { const n = FS.get(d); if (n) walk(d, n); });
       $('.mp-list').innerHTML = Synth.tracks.map(t => `
         <div class="mp-track ${Synth.current && Synth.current.id === t.id ? 'playing' : ''}" data-id="${t.id}">
           <div class="mp-art" style="background:${t.color}">${t.art}</div>
           <div><div class="mp-t">${t.title}</div><div class="mp-a">${t.artist} • ${t.album}</div></div>
           <div class="mp-dur">${Utils.fmtTime(Synth.length(t))}</div>
-        </div>`).join('');
+        </div>`).join('') + (mine.length ? `<div class="mp-section">Your files</div>` + mine.map(f => `<div class="mp-track" data-path="${Utils.esc(f.path)}"><div class="mp-art" style="background:#444">${f.video ? '🎬' : '🎵'}</div><div><div class="mp-t">${Utils.esc(f.name)}</div><div class="mp-a">${Utils.esc(f.path.split('/').slice(-2, -1)[0])}</div></div></div>`).join('') : '');
     }
     $('.mp-list').addEventListener('click', e => {
       const row = e.target.closest('.mp-track');
       if (!row) return;
+      if (row.dataset.path) { win._mpOpenPath(row.dataset.path); return; }
       stopMedia();
       Synth.setQueue(Synth.tracks);
       Synth.play(Synth.tracks.find(t => t.id === row.dataset.id), 0);
@@ -1560,7 +1590,11 @@ Apps.register({
           <div class="set-card"><div class="start-avatar" style="width:56px;height:56px;font-size:${av ? 30 : 24}px">${av || Utils.esc(name[0].toUpperCase())}</div><div class="set-info"><div class="set-t">${Utils.esc(name)}</div><div class="set-s">Local account • DESKTOP-WEB</div></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Your name</div><div class="set-s">Shown in the Start menu and on achievements</div></div><input class="fluent-input" id="acc-name" maxlength="24" value="${Utils.esc(name)}"></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Avatar</div><div class="set-s">Pick an emoji, or the first letter of your name</div></div></div>
-          <div class="accent-row">${Accounts.AVATARS.map(a => `<div class="acc-opt av-opt ${av === a ? 'sel' : ''}" data-av="${a}">${a || Utils.esc(name[0].toUpperCase())}</div>`).join('')}</div>`;
+          <div class="accent-row">${Accounts.AVATARS.map(a => `<div class="acc-opt av-opt ${av === a ? 'sel' : ''}" data-av="${a}">${a || Utils.esc(name[0].toUpperCase())}</div>`).join('')}</div>
+          <div style="height:14px"></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Sign-in PIN</div><div class="set-s">${PinLock.enabled() ? 'A PIN is required on the lock screen (Windows Hello still works).' : 'Ask for a 4–8 digit PIN on the lock screen. Stored hashed, in this browser only.'}</div></div><button class="fluent-btn" id="pin-set">${PinLock.enabled() ? 'Change' : 'Set up'}</button>${PinLock.enabled() ? '<button class="fluent-btn subtle" id="pin-rm">Remove</button>' : ''}</div>`;
+        content.querySelector('#pin-set').addEventListener('click', () => { const a = prompt('New PIN (4–8 digits):'); if (a === null) return; if (!/^\d{4,8}$/.test(a)) { Shell.toast('Accounts', 'Use 4 to 8 digits.', '🔐'); return; } const b = prompt('Confirm PIN:'); if (b !== a) { Shell.toast('Accounts', 'PINs didn\'t match.', '🔐'); return; } PinLock.set(a).then(() => { Shell.toast('Accounts', 'PIN set. You\'ll need it on the lock screen.', '🔐'); renderContent(); }); });
+        const rm = content.querySelector('#pin-rm'); if (rm) rm.addEventListener('click', () => { PinLock.clear(); renderContent(); Shell.toast('Accounts', 'PIN removed.', '🔓'); });
         content.querySelector('#acc-name').addEventListener('change', e => { const v = e.target.value.trim(); if (v) { Settings.set('userName', v); renderContent(); } });
         content.querySelectorAll('.av-opt').forEach(a => a.addEventListener('click', () => { Settings.set('avatar', a.dataset.av); renderContent(); }));
       } else if (sel === 'accessibility') {

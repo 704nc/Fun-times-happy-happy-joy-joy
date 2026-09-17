@@ -54,6 +54,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Real Open / Save As dialogs** — Notepad, Word, PowerPoint and Paint use a shared file dialog over the virtual drive (folders, new folder, extension picker) instead of prompts. Notepad and Word can print.
 - **Xbox Game Bar** — Win+G: FPS, screenshots, window capture, gamerscore, high scores. Settings → Gaming has an always-on FPS counter.
 - **3D Pipes** screensaver. Because.
+- **PIN sign-in** — Settings → Accounts. Stored as a salted SHA-256 hash in this browser only; the lock screen shows a keypad, five misses means a 30-second timeout, and Windows Hello still bypasses it. Widgets can be hidden individually.
 - **Windows Hello** — "Sign in with your face" on the lock screen uses your real camera; the recognition is pure theatre.
 - **Voice typing** — Win+H dictates into any text field (Web Speech API, Chrome/Edge).
 - **Do not disturb** and **Battery saver** tiles in the action center; muted toasts collect in the notification center.
@@ -77,12 +78,12 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | App | What actually works |
 |---|---|
 | MSN Weather | **Real** 7-day forecast from Open-Meteo (no key) for any city or your GPS location, °F/°C. Feeds the taskbar, the Widgets panel and Copilot. Offline it falls back to a deterministic Webville forecast |
-| File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out. List/grid views, sort, in-folder search, Properties, Copy/Cut/Paste (Ctrl+C/X/V), Open with…, a preview pane (Space) for images, video, audio, text, Office files, **Compress to ZIP** (a real archive you can download) and **Extract all** (STORE and DEFLATE) |
+| File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out. List/grid views, sort, in-folder search, Properties, Copy/Cut/Paste (Ctrl+C/X/V), Open with…, a preview pane (Space) for images, video, audio, text, Office files, multi-select (Ctrl/Shift/Ctrl+A), Delete/F2/Enter/arrow keys, inline rename, **Compress to ZIP** (a real archive you can download) and **Extract all** (STORE and DEFLATE) |
 | Word | Rich-text editing (bold/italic/lists/headings/quotes/colors/fonts/sizes), pictures from your Pictures folder, tables, find, page & word count, print, export to .txt/.html/.md, Open/Save As dialogs; saves `.doc` |
 | Excel | Real formula engine — `=SUM(A1:A5)`, `AVG`, `MIN`, `MAX`, `COUNT`, arithmetic, cell references, circular-ref detection; `ROUND`/`ABS`/`SQRT`/`POWER`/`MOD`/`INT`/`MEDIAN`/`PRODUCT`/`IF` with comparisons, bold/currency/percent/decimal formatting, bar/line/pie charts from a range, CSV export; saves `.xls` |
 | PowerPoint | Slide editor with thumbnails, six themes, pictures on slides, speaker notes, duplicate/reorder, fade/slide/zoom transitions, full-screen Present mode (arrows, B for black, timer), outline export; saves `.ppt` |
 | Photos | Gallery of the virtual Pictures folder with albums (Camera Roll, Screenshots, Wallpapers…), viewer with next/prev, rotate, filters, save-a-copy, slideshow, delete, import your own images, set-as-wallpaper |
-| Media Player | Plays the built-in music library (synthesized live via WebAudio), plus any audio/video file you open from disk; seek bar + visualizer |
+| Media Player | Plays the built-in music library (synthesized live via WebAudio), plus any audio/video file you open from disk or that lives in Music, Videos or Downloads (recordings, camera clips); seek bar + visualizer |
 | Spotify | Full clone UI — albums, search, library, queue, working play/pause/next/seek/volume, Liked Songs and your own playlists (right-click a track). Every track is procedurally composed and actually plays |
 | Slack / Discord | Channels and direct messages, persistent history, and chatty bot coworkers/gamers who type back |
 | Microsoft Edge | Browser-in-a-browser with tabs, bookmarks bar, history, search, and an honest "this site blocks embedding" banner. Deploy the optional proxy in [`proxy/`](proxy/README.md) (a 5-minute Cloudflare Worker) and Edge routes through it automatically so most sites load |
@@ -97,7 +98,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 
 ## Tests
 
-Fifteen end-to-end suites in [`tests/`](tests/README.md) drive the real desktop in headless Chromium (every app, the games, Office, Explorer, Edge, two-tab Nearby Share, a phone-size sweep). `node tests/run.mjs` runs them locally; the **Tests** GitHub Actions workflow runs them on every push.
+Sixteen end-to-end suites in [`tests/`](tests/README.md) drive the real desktop in headless Chromium (every app, the games, Office, Explorer, Edge, two-tab Nearby Share, a phone-size sweep). `node tests/run.mjs` runs them locally; the **Tests** GitHub Actions workflow runs them on every push.
 
 ## Performance notes
 

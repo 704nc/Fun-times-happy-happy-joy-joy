@@ -153,7 +153,7 @@ const HelloSignIn = {
       try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }); box.querySelector('video').srcObject = stream; }
       catch (err) { box.querySelector('.hello-msg').textContent = 'Couldn\'t use the camera. Click anywhere to sign in instead.'; btn.disabled = false; setTimeout(() => box.remove(), 2500); return; }
       setTimeout(() => { box.querySelector('.hello-msg').textContent = 'Hi, ' + (Settings.get('userName') || 'there') + '! ✓'; box.classList.add('ok'); try { Synth.note(84, 0.3, 'sine'); } catch (x) {} }, 1800);
-      setTimeout(() => { stream.getTracks().forEach(t => t.stop()); Achievements.unlock('hello'); lockEl.click(); }, 2700);
+      setTimeout(() => { stream.getTracks().forEach(t => t.stop()); Achievements.unlock('hello'); if (typeof PinLock !== 'undefined') PinLock.bypass = true; lockEl.click(); }, 2700);
     });
   }
 };

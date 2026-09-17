@@ -444,8 +444,8 @@ const Lock = {
       setTimeout(() => el.remove(), 500);
     };
     setTimeout(() => {
-      el.addEventListener('click', unlock, { once: true });
-      document.addEventListener('keydown', unlock, { once: true });
+      if (typeof PinLock !== 'undefined') PinLock.gate(el, unlock);
+      else { el.addEventListener('click', unlock, { once: true }); document.addEventListener('keydown', unlock, { once: true }); }
     }, 300);
   }
 };

@@ -45,8 +45,8 @@
         }, 900);
       }
     };
-    lockEl.addEventListener('click', unlock, { once: true });
-    document.addEventListener('keydown', unlock, { once: true });
+    if (typeof PinLock !== 'undefined') PinLock.gate(lockEl, unlock);
+    else { lockEl.addEventListener('click', unlock, { once: true }); document.addEventListener('keydown', unlock, { once: true }); }
   }
 
   const finish = () => {
