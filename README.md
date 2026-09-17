@@ -46,6 +46,9 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Neko** — a desktop cat from the Store that chases your mouse and naps when you stop. Pet her.
 - **Accounts & Accessibility** — rename yourself, pick an emoji avatar, turn on Narrator (reads toasts and Clippy aloud) or rainbow mouse trails.
 - **Matrix** screensaver, minimize/restore animations, and Task Manager knows about all of it.
+- **Snipping Tool** — Win+Shift+S captures the whole desktop (DOM → SVG → JPEG, no libraries) into Pictures › Screenshots. Chrome/Edge.
+- **Accessibility** — text size 100–150%, high-contrast mode, Narrator, mouse trails, emoji panel.
+- **Lock screen** shows the weather, your next event, unread mail and notification count.
 - **First-run setup** — a Windows-style OOBE on first boot: name, avatar, visual style, wallpaper, extras. Skippable.
 - **Copilot voice** — 🎤 in Copilot uses the Web Speech API (Chrome/Edge). Narrator reads replies aloud if enabled.
 - **Action center** — Wi-Fi and Bluetooth panels with (fake) networks and devices, airplane mode, real online/offline detection, and the real battery level in the tray.
@@ -62,11 +65,11 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | App | What actually works |
 |---|---|
 | MSN Weather | **Real** 7-day forecast from Open-Meteo (no key) for any city or your GPS location, °F/°C. Feeds the taskbar, the Widgets panel and Copilot. Offline it falls back to a deterministic Webville forecast |
-| File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out |
+| File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out. List/grid views, sort, in-folder search, Properties dialog |
 | Word | Rich-text editing (bold/italic/lists/headings/colors), word count, saves `.doc` files to Documents |
 | Excel | Real formula engine — `=SUM(A1:A5)`, `AVG`, `MIN`, `MAX`, `COUNT`, arithmetic, cell references, circular-ref detection; saves `.xls` |
 | PowerPoint | Slide editor with thumbnails + full-screen Present mode (arrow keys); saves `.ppt` |
-| Photos | Gallery of the virtual Pictures folder, viewer with next/prev, import your own images, set-as-wallpaper |
+| Photos | Gallery of the virtual Pictures folder, viewer with next/prev, rotate, filters, save-a-copy, slideshow, delete, import your own images, set-as-wallpaper |
 | Media Player | Plays the built-in music library (synthesized live via WebAudio), plus any audio/video file you open from disk; seek bar + visualizer |
 | Spotify | Full clone UI — albums, search, library, queue, working play/pause/next/seek/volume. Every track is procedurally composed and actually plays |
 | Slack / Discord | Channels, persistent message history, and chatty bot coworkers/gamers who type back |
@@ -74,9 +77,11 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | Outlook | Folders, search, compose, drafts, junk, reply. Mail the bots in the address book (Clippy, Neko, IT Helpdesk, The Boss) and they write back |
 | Calendar | Month view, events with colors and 10-minute reminders, agenda in the clock flyout |
 | Camera / Voice Recorder | Real webcam with filters; real microphone with a live meter. Photos land in Camera Roll, recordings in Music › Recordings |
-| Notepad, Paint, Calculator, Terminal, Settings | The classics: Paint has shapes + flood fill and saves PNGs; Terminal has a real command set over the virtual FS (`help`); Settings does themes, wallpapers, accent colors, storage and Reset PC |
+| Notepad | Find & replace, word wrap, zoom, tab indent, Ln/Col + word count status bar, dirty-state title |
+| Clock | World clocks, stopwatch with laps, timers and alarms that keep running (and ring) with the window closed |
+| Paint, Calculator, Terminal, Settings | The classics: Paint has shapes + flood fill and saves PNGs; Terminal has a real command set over the virtual FS (`help`), history (↑/↓) and Tab completion; Settings does themes, wallpapers, accent colors, storage and Reset PC |
 
-**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper, Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Chess** (full rules, alpha-beta engine, three difficulties), **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. All uninstallable from the Store or Settings → Apps.
+**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper (three difficulties, timer, best times), Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Chess** (full rules, alpha-beta engine, three difficulties), **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. All uninstallable from the Store or Settings → Apps.
 
 ## Performance notes
 

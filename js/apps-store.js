@@ -9,16 +9,29 @@ Apps.register({
   category: 'Games', store: true, width: 420, height: 520,
   desc: 'The classic. Clear the board without detonating a mine. Right-click to flag.', rating: 4.8, size: '2.1 MB',
   mount(win) {
-    const W = 9, H = 9, MINES = 10;
-    let grid, revealed, flagged, over, firstClick;
+    const LEVELS = { beginner: [9, 9, 10], intermediate: [16, 16, 40], expert: [30, 16, 99] };
+    let level = Store.get('win11.mines.level', 'beginner');
+    let W, H, MINES, cell;
+    let grid, revealed, flagged, over, firstClick, t0 = 0, timer = null;
     win.body.innerHTML = `
-      <div class="game-center">
-        <div class="game-hud"><span class="ms-mines">💣 ${MINES}</span><button class="fluent-btn subtle ms-new">🙂 New game</button><span class="ms-status"></span></div>
-        <div class="mine-grid" style="grid-template-columns:repeat(${W},30px)"></div>
+      <div class="game-center" style="justify-content:flex-start;overflow:auto">
+        <div class="game-hud"><select class="fluent-input ms-level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="expert">Expert</option></select><span class="ms-mines">💣</span><span class="ms-time">⏱ 0</span><button class="fluent-btn subtle ms-new">🙂 New game</button><span class="ms-status"></span></div>
+        <div class="mine-grid"></div>
+        <div class="ms-best" style="font-size:12px;color:var(--text-2)"></div>
       </div>`;
     const gridEl = win.body.querySelector('.mine-grid');
     const status = win.body.querySelector('.ms-status');
+    const timeEl = win.body.querySelector('.ms-time');
+    win.body.querySelector('.ms-level').value = level;
+    function best() { const b = Store.get('win11.mines.best', {}); win.body.querySelector('.ms-best').textContent = b[level] ? 'Best ' + level + ': ' + b[level] + 's' : ''; return b; }
     function reset() {
+      [W, H, MINES] = LEVELS[level]; cell = W > 16 ? 22 : W > 9 ? 26 : 30;
+      gridEl.style.gridTemplateColumns = `repeat(${W},${cell}px)`;
+      gridEl.style.setProperty('--ms-cell', cell + 'px');
+      clearInterval(timer); timer = null; t0 = 0; timeEl.textContent = '⏱ 0';
+      const wantW = Math.min(innerWidth - 20, W * (cell + 2) + 60), wantH = Math.min(innerHeight - 70, H * (cell + 2) + 170);
+      if (!win.maxed && (win.el.offsetWidth < wantW || win.el.offsetHeight < wantH)) { win.el.style.width = Math.max(win.el.offsetWidth, wantW) + 'px'; win.el.style.height = Math.max(win.el.offsetHeight, wantH) + 'px'; }
+      best();
       grid = Array.from({ length: H }, () => Array(W).fill(0));
       revealed = Array.from({ length: H }, () => Array(W).fill(false));
       flagged = Array.from({ length: H }, () => Array(W).fill(false));
@@ -67,16 +80,16 @@ Apps.register({
     function checkWin() {
       let unrevealed = 0;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!revealed[y][x]) unrevealed++;
-      if (unrevealed === MINES) { over = true; status.textContent = '🎉 You win!'; Achievements.unlock('minesweeper'); }
+      if (unrevealed === MINES) { over = true; clearInterval(timer); const secs = Math.max(1, Math.round((Date.now() - t0) / 1000)); status.textContent = '🎉 You win! ' + secs + 's'; Achievements.unlock('minesweeper'); if (level === 'expert') Achievements.unlock('sweeper-expert'); const b = Store.get('win11.mines.best', {}); if (!b[level] || secs < b[level]) { b[level] = secs; Store.set('win11.mines.best', b); Shell.toast('Minesweeper', 'New best time on ' + level + ': ' + secs + 's', '🏅'); } best(); }
     }
     gridEl.addEventListener('click', e => {
       const c = e.target.closest('.mine-cell');
       if (!c || over) return;
       const x = +c.dataset.x, y = +c.dataset.y;
       if (flagged[y][x]) return;
-      if (firstClick) { placeMines(x, y); firstClick = false; }
+      if (firstClick) { placeMines(x, y); firstClick = false; t0 = Date.now(); timer = setInterval(() => { timeEl.textContent = '⏱ ' + Math.floor((Date.now() - t0) / 1000); }, 500); }
       if (grid[y][x] === -1) {
-        over = true;
+        over = true; clearInterval(timer);
         for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) if (grid[yy][xx] === -1) revealed[yy][xx] = true;
         status.textContent = '💥 Boom! Game over.';
       } else { reveal(x, y); checkWin(); }
@@ -90,6 +103,8 @@ Apps.register({
       if (!revealed[y][x]) { flagged[y][x] = !flagged[y][x]; draw(); }
     });
     win.body.querySelector('.ms-new').addEventListener('click', reset);
+    win.body.querySelector('.ms-level').addEventListener('change', e => { level = e.target.value; Store.set('win11.mines.level', level); reset(); });
+    win.onClose(() => clearInterval(timer));
     reset();
   }
 });
@@ -344,36 +359,63 @@ Apps.register({
 /* Clock */
 Apps.register({
   id: 'clock', name: 'Clock', icon: '⏰', color: 'linear-gradient(135deg,#a18cd1,#5b48a2)',
-  category: 'Utilities', store: true, width: 420, height: 440,
-  desc: 'Clock and stopwatch. Time flies when you are simulating an OS.', rating: 4.4, size: '1.0 MB',
+  category: 'Utilities', store: true, width: 460, height: 500, singleton: true,
+  desc: 'Clock, stopwatch, timers and alarms. Timers and alarms keep running after you close the app, and ring with a toast and a chime.', rating: 4.6, size: '1.0 MB',
   mount(win) {
-    win.body.innerHTML = `
-      <div class="clock-root">
-        <div class="clock-time"></div>
-        <div class="clock-date"></div>
-        <div class="clock-sw">0:00.0</div>
-        <div style="display:flex;gap:8px">
-          <button class="fluent-btn sw-start">Start</button>
-          <button class="fluent-btn subtle sw-reset">Reset</button>
-        </div>
-      </div>`;
-    const timeEl = win.body.querySelector('.clock-time');
-    const dateEl = win.body.querySelector('.clock-date');
-    const swEl = win.body.querySelector('.clock-sw');
-    let swRunning = false, swAcc = 0, swStart = 0;
-    const tick = setInterval(() => {
+    let tab = 'clock';
+    win.body.innerHTML = `<div class="clock-root"><div class="clk-tabs">${[['clock', '🕒 Clock'], ['stopwatch', '⏱ Stopwatch'], ['timer', '⏲ Timer'], ['alarm', '⏰ Alarm']].map(([id, n]) => `<button data-t="${id}" class="${id === tab ? 'sel' : ''}">${n}</button>`).join('')}</div><div class="clk-body"></div></div>`;
+    const body = win.body.querySelector('.clk-body');
+    let swRunning = false, swAcc = 0, swStart = 0, laps = [];
+    function render() {
+      win.body.querySelectorAll('.clk-tabs button').forEach(b => b.classList.toggle('sel', b.dataset.t === tab));
+      if (tab === 'clock') body.innerHTML = `<div class="clock-time"></div><div class="clock-date"></div><div class="clk-zones">${[['Local', 0], ['UTC', 'UTC'], ['New York', 'America/New_York'], ['London', 'Europe/London'], ['Tokyo', 'Asia/Tokyo'], ['Sydney', 'Australia/Sydney']].map(([n, z]) => `<div class="clk-zone"><span>${n}</span><b data-z="${z}"></b></div>`).join('')}</div>`;
+      else if (tab === 'stopwatch') body.innerHTML = `<div class="clock-sw">0:00.0</div><div style="display:flex;gap:8px"><button class="fluent-btn sw-start">${swRunning ? 'Pause' : 'Start'}</button><button class="fluent-btn subtle sw-lap">Lap</button><button class="fluent-btn subtle sw-reset">Reset</button></div><div class="clk-laps">${laps.map((l, i) => `<div>Lap ${i + 1}: ${l}</div>`).join('')}</div>`;
+      else if (tab === 'timer') body.innerHTML = `<div class="clk-presets">${[1, 3, 5, 10, 15, 25].map(m => `<button class="fluent-btn subtle" data-min="${m}">${m} min</button>`).join('')}</div><div style="display:flex;gap:8px;align-items:center"><input class="fluent-input tm-custom" placeholder="e.g. 90s, 2m 30s, 1h" style="flex:1"><button class="fluent-btn tm-add">Start</button></div><div class="clk-list tm-list"></div>`;
+      else body.innerHTML = `<div style="display:flex;gap:8px;align-items:center"><input type="time" class="fluent-input al-time" value="07:30"><input class="fluent-input al-label" placeholder="Label (optional)" style="flex:1"><button class="fluent-btn al-add">Add</button></div><div class="clk-list al-list"></div>`;
+      wire(); tick();
+    }
+    function tick() {
+      if (!body.isConnected) return;
       const now = new Date();
-      timeEl.textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
-      dateEl.textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      const ms = swAcc + (swRunning ? Date.now() - swStart : 0);
-      swEl.textContent = Math.floor(ms / 60000) + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '.' + Math.floor(ms % 1000 / 100);
-    }, 100);
-    win.body.querySelector('.sw-start').addEventListener('click', e => {
-      if (swRunning) { swAcc += Date.now() - swStart; swRunning = false; e.target.textContent = 'Start'; }
-      else { swStart = Date.now(); swRunning = true; e.target.textContent = 'Pause'; }
-    });
-    win.body.querySelector('.sw-reset').addEventListener('click', () => { swAcc = 0; swStart = Date.now(); });
-    win.onClose(() => clearInterval(tick));
+      if (tab === 'clock') {
+        body.querySelector('.clock-time').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+        body.querySelector('.clock-date').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        body.querySelectorAll('[data-z]').forEach(z => { try { z.textContent = now.toLocaleTimeString([], z.dataset.z === '0' ? { hour: 'numeric', minute: '2-digit' } : { hour: 'numeric', minute: '2-digit', timeZone: z.dataset.z }); } catch (e) { z.textContent = '—'; } });
+      } else if (tab === 'stopwatch') {
+        const ms = swAcc + (swRunning ? Date.now() - swStart : 0);
+        body.querySelector('.clock-sw').textContent = fmtSw(ms);
+      } else if (tab === 'timer') {
+        body.querySelector('.tm-list').innerHTML = Timers.list.map(t => { const left = Math.max(0, Math.ceil((t.end - Date.now()) / 1000)); return `<div class="clk-item"><div style="flex:1"><div>${Utils.esc(t.label)}</div><div class="store-progress" style="margin-top:6px"><div style="width:${100 - left / t.total * 100}%"></div></div></div><b>${Utils.fmtTime(left)}</b><button data-cancel="${t.id}" title="Cancel">✕</button></div>`; }).join('') || '<div class="wg-sub" style="padding:10px 0">No timers running. Pick a preset or type a duration.</div>';
+      } else if (tab === 'alarm') {
+        body.querySelector('.al-list').innerHTML = Timers.alarms().map(a => `<div class="clk-item ${a.on ? '' : 'off'}"><div style="flex:1"><div style="font-size:22px">${a.time}</div><div class="wg-sub">${Utils.esc(a.label)}</div></div><div class="switch ${a.on ? 'on' : ''}" data-toggle="${a.id}"></div><button data-del="${a.id}" title="Delete">🗑️</button></div>`).join('') || '<div class="wg-sub" style="padding:10px 0">No alarms. Add one above; it rings even when this window is closed.</div>';
+      }
+    }
+    const fmtSw = ms => Math.floor(ms / 60000) + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '.' + Math.floor(ms % 1000 / 100);
+    function wire() {
+      const $ = s => body.querySelector(s);
+      if (tab === 'stopwatch') {
+        $('.sw-start').addEventListener('click', e => { if (swRunning) { swAcc += Date.now() - swStart; swRunning = false; e.target.textContent = 'Start'; } else { swStart = Date.now(); swRunning = true; e.target.textContent = 'Pause'; } });
+        $('.sw-reset').addEventListener('click', () => { swAcc = 0; swStart = Date.now(); laps = []; render(); });
+        $('.sw-lap').addEventListener('click', () => { laps.push(fmtSw(swAcc + (swRunning ? Date.now() - swStart : 0))); render(); });
+      } else if (tab === 'timer') {
+        body.querySelectorAll('[data-min]').forEach(b => b.addEventListener('click', () => { Timers.add(+b.dataset.min * 60, b.dataset.min + ' minute timer'); tick(); }));
+        const add = () => { const s = parseDuration($('.tm-custom').value); if (!s) { Shell.toast('Clock', 'Try something like "90s", "2m 30s" or "1h".', '⏲'); return; } Timers.add(s, 'Timer (' + $('.tm-custom').value + ')'); $('.tm-custom').value = ''; tick(); };
+        $('.tm-add').addEventListener('click', add); $('.tm-custom').addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+        body.addEventListener('click', e => { const c = e.target.closest('[data-cancel]'); if (c) { Timers.cancel(+c.dataset.cancel); tick(); } });
+      } else if (tab === 'alarm') {
+        $('.al-add').addEventListener('click', () => { if (!$('.al-time').value) return; Timers.addAlarm($('.al-time').value, $('.al-label').value.trim() || 'Alarm'); $('.al-label').value = ''; tick(); });
+        body.addEventListener('click', e => {
+          const t = e.target.closest('[data-toggle]'), d = e.target.closest('[data-del]');
+          if (t) { const a = Timers.alarms(); const x = a.find(z => z.id === +t.dataset.toggle); if (x) x.on = !x.on; Timers.saveAlarms(a); tick(); }
+          if (d) { Timers.saveAlarms(Timers.alarms().filter(z => z.id !== +d.dataset.del)); tick(); }
+        });
+      }
+    }
+    win.body.querySelector('.clk-tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tab = b.dataset.t; render(); } });
+    const iv = setInterval(tick, 100);
+    Bus.on('timers:changed', () => { if (body.isConnected) tick(); });
+    win.onClose(() => clearInterval(iv));
+    render();
   }
 });
 

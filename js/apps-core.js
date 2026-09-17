@@ -24,7 +24,8 @@ Apps.register({
   category: 'System', width: 900, height: 580,
   mount(win, args) {
     let cwd = args.path || HOME;
-    let history = [cwd], hIdx = 0, selected = null;
+    let history = [cwd], hIdx = 0, selected = null, view = Store.get('win11.fx.view', 'grid'), sortBy = 'name', filter = '';
+    const sizeOf = n => n.type === 'folder' ? Object.keys(n.children).length : String(n.content || '').length;
     win.body.innerHTML = `
       <div class="fx-root">
         <div class="app-toolbar">
@@ -35,6 +36,9 @@ Apps.register({
           <button class="fx-newfolder">➕ New folder</button>
           <button class="fx-newfile">📄 New file</button>
           <label class="fx-upload" title="Upload files from your computer">⬆️ Upload<input type="file" multiple style="display:none"></label>
+          <select class="fx-sort" title="Sort"><option value="name">Name</option><option value="type">Type</option><option value="size">Size</option></select>
+          <button class="fx-view" title="Toggle list / grid view">☰</button>
+          <input class="fx-search" placeholder="Search this folder" spellcheck="false">
         </div>
         <div class="fx-main">
           <div class="fx-side"></div>
@@ -72,11 +76,16 @@ Apps.register({
         acc = i === 0 ? 'C:' : acc + '/' + c;
         return `<span class="fx-crumb" data-p="${acc}">${Utils.esc(c)}</span>` + (i < crumbs.length - 1 ? '<span> › </span>' : '');
       }).join('');
-      const items = FS.list(cwd);
+      let items = FS.list(cwd);
+      if (filter) items = items.filter(i => i.name.toLowerCase().includes(filter));
+      if (sortBy === 'type') items.sort((a, b) => (a.node.type !== b.node.type) ? (a.node.type === 'folder' ? -1 : 1) : (a.name.split('.').pop() || '').localeCompare(b.name.split('.').pop() || '') || a.name.localeCompare(b.name));
+      else if (sortBy === 'size') items.sort((a, b) => sizeOf(b.node) - sizeOf(a.node));
+      $('.fx-files').classList.toggle('list', view === 'list');
+      $('.fx-view').textContent = view === 'list' ? '▦' : '☰';
       $('.fx-files').innerHTML = items.map(it =>
-        `<div class="fx-item" data-n="${Utils.esc(it.name)}"><div class="fx-ico">${fileIcon(it.name, it.node)}</div><div class="fx-name">${Utils.esc(it.name)}</div></div>`
-      ).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--text-2);padding:40px">This folder is empty.</div>';
-      $('.fx-status').textContent = items.length + ' item' + (items.length === 1 ? '' : 's');
+        `<div class="fx-item" data-n="${Utils.esc(it.name)}"><div class="fx-ico">${fileIcon(it.name, it.node)}</div><div class="fx-name">${Utils.esc(it.name)}</div>${view === 'list' ? `<div class="fx-meta">${it.node.type === 'folder' ? 'File folder' : (it.name.split('.').pop() || '').toUpperCase() + ' file'}</div><div class="fx-meta">${it.node.type === 'folder' ? sizeOf(it.node) + ' items' : Utils.fmtBytes(sizeOf(it.node))}</div>` : ''}</div>`
+      ).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--text-2);padding:40px">' + (filter ? 'No items match your search.' : 'This folder is empty.') + '</div>';
+      $('.fx-status').textContent = items.length + ' item' + (items.length === 1 ? '' : 's') + (selected ? ' • ' + selected + ' selected' : '');
     }
     $('.fx-breadcrumb').addEventListener('click', e => {
       const c = e.target.closest('.fx-crumb');
@@ -114,6 +123,24 @@ Apps.register({
       });
     }
     $('.fx-upload input').addEventListener('change', e => { importFiles(e.target.files); e.target.value = ''; });
+    $('.fx-sort').addEventListener('change', e => { sortBy = e.target.value; render(); });
+    $('.fx-view').addEventListener('click', () => { view = view === 'list' ? 'grid' : 'list'; Store.set('win11.fx.view', view); render(); });
+    $('.fx-search').addEventListener('input', e => { filter = e.target.value.trim().toLowerCase(); render(); });
+    function properties(name) {
+      const p = cwd + '/' + name, n = FS.get(p); if (!n) return;
+      const dlg = Utils.el('div', 'fx-props');
+      const count = (node) => { let f = 0, d = 0; const walk = x => { for (const c of Object.values(x.children || {})) { if (c.type === 'folder') { d++; walk(c); } else f++; } }; walk(node); return { f, d }; };
+      const c = n.type === 'folder' ? count(n) : null;
+      const size = n.type === 'folder' ? (() => { let s = 0; const walk = x => { for (const ch of Object.values(x.children || {})) ch.type === 'folder' ? walk(ch) : s += String(ch.content || '').length; }; walk(n); return s; })() : sizeOf(n);
+      dlg.innerHTML = `<div class="fx-props-card"><div class="fx-props-head"><span style="font-size:32px">${fileIcon(name, n)}</span><div><div style="font-weight:600">${Utils.esc(name)}</div><div style="font-size:12px;color:var(--text-2)">${n.type === 'folder' ? 'File folder' : (n.mime || 'text/plain')}</div></div></div>
+        <div class="fx-props-row"><span>Location</span><span>${Utils.esc(cwd.replace(/\//g, '\\'))}</span></div>
+        <div class="fx-props-row"><span>Size</span><span>${Utils.fmtBytes(size)}${c ? ` (${c.f} files, ${c.d} folders)` : ''}</span></div>
+        <div class="fx-props-row"><span>Type</span><span>${n.type === 'folder' ? 'Folder' : (name.split('.').pop() || 'file').toUpperCase()}</span></div>
+        <div class="fx-props-row"><span>Storage</span><span>Browser localStorage</span></div>
+        <div class="oc-btns" style="justify-content:flex-end"><button class="fluent-btn">OK</button></div></div>`;
+      win.body.querySelector('.fx-root').appendChild(dlg);
+      dlg.querySelector('button').addEventListener('click', () => dlg.remove());
+    }
     ['dragenter', 'dragover'].forEach(ev => files.addEventListener(ev, e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); files.classList.add('drop'); } }));
     files.addEventListener('dragleave', () => files.classList.remove('drop'));
     files.addEventListener('drop', e => { e.preventDefault(); files.classList.remove('drop'); if (e.dataTransfer.files.length) importFiles(e.dataTransfer.files); });
@@ -159,6 +186,7 @@ Apps.register({
           items.push({ label: 'Edit in Paint', icon: '🎨', fn: () => Apps.launch('paint', { path: p }) });
         }
         if (FS.get(p) && FS.get(p).type === 'file') items.push({ label: 'Download to this computer', icon: '⬇️', fn: () => download(p) });
+        items.push({ label: 'Properties', icon: 'ℹ️', fn: () => properties(it.dataset.n) });
         items.push(
           { label: 'Rename', icon: '✏️', fn: () => {
             const n = prompt('Rename to:', it.dataset.n);
@@ -193,23 +221,26 @@ Apps.register({
   id: 'notepad', name: 'Notepad', icon: '📝', color: 'linear-gradient(135deg,#6ec6ff,#2286c3)',
   category: 'Productivity', width: 700, height: 500,
   mount(win, args) {
-    let path = args.path || null;
+    let path = args.path || null, zoom = 100, dirty = false;
     win.body.innerHTML = `
       <div class="app-toolbar">
         <button class="np-new">New</button>
         <button class="np-save">Save</button>
         <button class="np-saveas">Save As…</button>
+        <button class="np-find" title="Find / Replace (Ctrl+H)">🔍 Find</button>
+        <label class="np-wrap" title="Word wrap"><input type="checkbox" checked> Wrap</label>
+        <button class="np-zoom-out" title="Zoom out (Ctrl+-)">−</button><span class="np-zoom">100%</span><button class="np-zoom-in" title="Zoom in (Ctrl++)">+</button>
         <span style="margin-left:auto;font-size:12px;color:var(--text-2)" class="np-status"></span>
       </div>
-      <textarea class="notepad-area" spellcheck="false" placeholder="Start typing…"></textarea>`;
-    const area = win.body.querySelector('.notepad-area');
-    const status = win.body.querySelector('.np-status');
+      <div class="np-findbar" style="display:none"><input class="fluent-input np-q" placeholder="Find" spellcheck="false"><input class="fluent-input np-r" placeholder="Replace with" spellcheck="false"><button class="fluent-btn subtle np-next">Next</button><button class="fluent-btn subtle np-replace">Replace</button><button class="fluent-btn subtle np-replaceall">Replace all</button><span class="np-count"></span><button class="np-findx" title="Close">✕</button></div>
+      <textarea class="notepad-area" spellcheck="false" placeholder="Start typing…"></textarea>
+      <div class="np-bar"><span class="np-pos">Ln 1, Col 1</span><span class="np-words">0 words</span><span class="np-enc">UTF-8</span></div>`;
+    const $ = s => win.body.querySelector(s);
+    const area = $('.notepad-area'), status = $('.np-status');
+    function title() { win.setTitle((dirty ? '*' : '') + (path ? path.split('/').pop() : 'Untitled') + ' - Notepad'); }
     function loadFile() {
-      if (path) {
-        const n = FS.get(path);
-        area.value = n ? String(n.content) : '';
-        win.setTitle((path.split('/').pop()) + ' - Notepad');
-      } else win.setTitle('Untitled - Notepad');
+      if (path) { const n = FS.get(path); area.value = n ? String(n.content) : ''; }
+      dirty = false; title(); bar();
     }
     function save(as) {
       if (!path || as) {
@@ -218,17 +249,65 @@ Apps.register({
         path = HOME + '/Documents/' + name;
       }
       FS.write(path, area.value, 'text/plain');
-      win.setTitle(path.split('/').pop() + ' - Notepad');
+      dirty = false; title();
       status.textContent = 'Saved ✓';
       setTimeout(() => status.textContent = '', 1600);
     }
-    win.body.querySelector('.np-new').addEventListener('click', () => { path = null; area.value = ''; loadFile(); });
-    win.body.querySelector('.np-save').addEventListener('click', () => save(false));
-    win.body.querySelector('.np-saveas').addEventListener('click', () => save(true));
-    area.addEventListener('keydown', e => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(false); }
+    function bar() {
+      const v = area.value, pos = area.selectionStart;
+      const before = v.slice(0, pos), ln = before.split('\n').length, col = pos - before.lastIndexOf('\n');
+      $('.np-pos').textContent = `Ln ${ln}, Col ${col}`;
+      $('.np-words').textContent = `${(v.match(/\S+/g) || []).length} words • ${v.length} chars`;
+    }
+    function setZoom(z) { zoom = Utils.clamp(z, 50, 300); area.style.fontSize = (14 * zoom / 100) + 'px'; $('.np-zoom').textContent = zoom + '%'; }
+    function findNext(fromStart) {
+      const q = $('.np-q').value; if (!q) return false;
+      const from = fromStart ? 0 : area.selectionEnd;
+      let i = area.value.toLowerCase().indexOf(q.toLowerCase(), from);
+      if (i < 0 && !fromStart) i = area.value.toLowerCase().indexOf(q.toLowerCase(), 0);
+      if (i < 0) { $('.np-count').textContent = 'Not found'; return false; }
+      area.focus(); area.setSelectionRange(i, i + q.length);
+      const all = area.value.toLowerCase().split(q.toLowerCase()).length - 1;
+      $('.np-count').textContent = all + ' match' + (all === 1 ? '' : 'es');
+      return true;
+    }
+    $('.np-new').addEventListener('click', () => { if (dirty && !confirm('Discard unsaved changes?')) return; path = null; area.value = ''; loadFile(); });
+    $('.np-save').addEventListener('click', () => save(false));
+    $('.np-saveas').addEventListener('click', () => save(true));
+    $('.np-find').addEventListener('click', () => { $('.np-findbar').style.display = ''; $('.np-q').focus(); $('.np-q').select(); });
+    $('.np-findx').addEventListener('click', () => { $('.np-findbar').style.display = 'none'; area.focus(); });
+    $('.np-next').addEventListener('click', () => findNext(false));
+    $('.np-q').addEventListener('keydown', e => { if (e.key === 'Enter') findNext(false); if (e.key === 'Escape') $('.np-findx').click(); });
+    $('.np-replace').addEventListener('click', () => {
+      const q = $('.np-q').value; if (!q) return;
+      const selTxt = area.value.slice(area.selectionStart, area.selectionEnd);
+      if (selTxt.toLowerCase() === q.toLowerCase()) { area.setRangeText($('.np-r').value, area.selectionStart, area.selectionEnd, 'end'); dirty = true; title(); }
+      findNext(false);
     });
+    $('.np-replaceall').addEventListener('click', () => {
+      const q = $('.np-q').value; if (!q) return;
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      const n = (area.value.match(re) || []).length;
+      area.value = area.value.replace(re, $('.np-r').value); dirty = true; title(); bar();
+      $('.np-count').textContent = 'Replaced ' + n;
+    });
+    $('.np-wrap input').addEventListener('change', e => { area.style.whiteSpace = e.target.checked ? '' : 'pre'; area.wrap = e.target.checked ? 'soft' : 'off'; });
+    $('.np-zoom-in').addEventListener('click', () => setZoom(zoom + 10));
+    $('.np-zoom-out').addEventListener('click', () => setZoom(zoom - 10));
+    area.addEventListener('keydown', e => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === 's') { e.preventDefault(); save(false); }
+      else if (mod && (e.key === 'h' || e.key === 'f')) { e.preventDefault(); $('.np-find').click(); }
+      else if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); setZoom(zoom + 10); }
+      else if (mod && e.key === '-') { e.preventDefault(); setZoom(zoom - 10); }
+      else if (mod && e.key === '0') { e.preventDefault(); setZoom(100); }
+      else if (e.key === 'F3') { e.preventDefault(); findNext(false); }
+      else if (e.key === 'Tab') { e.preventDefault(); area.setRangeText('\t', area.selectionStart, area.selectionEnd, 'end'); }
+    });
+    area.addEventListener('input', () => { if (!dirty) { dirty = true; title(); } bar(); });
+    ['keyup', 'click', 'select'].forEach(ev => area.addEventListener(ev, bar));
     loadFile();
+    setTimeout(() => area.focus(), 100);
   }
 });
 
@@ -313,6 +392,7 @@ Apps.register({
     win.body.innerHTML = `<div class="term-root"></div>`;
     const root = win.body.querySelector('.term-root');
     let cwd = HOME;
+    const termHist = [];
     const println = (s, color) => {
       const l = Utils.el('div', 't-line');
       l.textContent = s;
@@ -325,9 +405,23 @@ Apps.register({
       root.appendChild(row);
       const input = row.querySelector('input');
       input.focus();
+      let hIdx = termHist.length;
       input.addEventListener('keydown', e => {
+        if (e.key === 'ArrowUp') { e.preventDefault(); if (hIdx > 0) { hIdx--; input.value = termHist[hIdx] || ''; } return; }
+        if (e.key === 'ArrowDown') { e.preventDefault(); if (hIdx < termHist.length) { hIdx++; input.value = termHist[hIdx] || ''; } return; }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const parts = input.value.split(/\s+/), last = parts[parts.length - 1] || '';
+          const cmds = ['help', 'dir', 'ls', 'cd', 'type', 'cat', 'echo', 'mkdir', 'del', 'rm', 'tree', 'start', 'apps', 'cls', 'clear', 'ver', 'whoami', 'date', 'exit'].concat(Object.keys(FunCmds));
+          const pool = parts.length === 1 ? cmds : (parts[0] === 'start' ? Apps.visible().map(a => a.id) : FS.list(cwd).map(i => i.name));
+          const m = pool.filter(x => x.toLowerCase().startsWith(last.toLowerCase()));
+          if (m.length === 1) { parts[parts.length - 1] = m[0]; input.value = parts.join(' ') + (parts.length === 1 ? ' ' : ''); }
+          else if (m.length > 1) { const l = Utils.el('div', 't-line'); l.textContent = m.join('   '); root.insertBefore(l, row); root.scrollTop = root.scrollHeight; }
+          return;
+        }
         if (e.key !== 'Enter') return;
         const cmd = input.value;
+        if (cmd.trim() && termHist[termHist.length - 1] !== cmd) termHist.push(cmd);
         row.innerHTML = `<span>${Utils.esc(cwd.replace(/\//g, '\\'))}&gt; ${Utils.esc(cmd)}</span>`;
         run(cmd);
         promptLine();
@@ -808,14 +902,19 @@ Apps.register({
           <div class="app-toolbar">
             <button class="pv-back">← All photos</button>
             <span style="font-size:12px;color:var(--text-2)">${Utils.esc(img.name)} (${viewing + 1} of ${imgs.length})</span>
-            <button class="pv-wall" style="margin-left:auto">🖼️ Set as wallpaper</button>
+            <button class="pv-rot" title="Rotate 90°" style="margin-left:auto">↻ Rotate</button>
+            <select class="pv-filter fluent-input" title="Filter"><option value="">No filter</option><option value="grayscale(1)">Noir</option><option value="sepia(.8)">Vintage</option><option value="saturate(2)">Vivid</option><option value="invert(1)">Negative</option><option value="blur(3px)">Dreamy</option></select>
+            <button class="pv-savecopy" title="Save a copy with the rotation and filter applied">💾 Save copy</button>
+            <button class="pv-slide" title="Slideshow">▶ Slideshow</button>
+            <button class="pv-wall">🖼️ Wallpaper</button>
+            <button class="pv-del" title="Delete">🗑️</button>
           </div>
           <div class="photo-viewer">
             <img src="${img.src}">
             <button class="pv-nav" style="left:12px">‹</button>
             <button class="pv-nav" style="right:12px">›</button>
           </div>`;
-        win.body.querySelector('.pv-back').addEventListener('click', () => { viewing = -1; render(); });
+        win.body.querySelector('.pv-back').addEventListener('click', () => { clearInterval(win._slide); win._slide = null; viewing = -1; render(); });
         const navs = win.body.querySelectorAll('.pv-nav');
         navs[0].addEventListener('click', () => { viewing = (viewing - 1 + imgs.length) % imgs.length; render(); });
         navs[1].addEventListener('click', () => { viewing = (viewing + 1) % imgs.length; render(); });
@@ -823,6 +922,32 @@ Apps.register({
           Settings.set('wallpaper', 'custom:' + img.src);
           Shell.toast('Photos', 'Wallpaper updated', '🖼️');
         });
+        const pic = win.body.querySelector('.photo-viewer img');
+        let rot = 0, filt = '';
+        const applyFx = () => { pic.style.transform = `rotate(${rot}deg)`; pic.style.filter = filt; };
+        win.body.querySelector('.pv-rot').addEventListener('click', () => { rot = (rot + 90) % 360; applyFx(); });
+        win.body.querySelector('.pv-filter').addEventListener('change', e => { filt = e.target.value; applyFx(); });
+        win.body.querySelector('.pv-savecopy').addEventListener('click', () => {
+          const c = document.createElement('canvas'); const w = pic.naturalWidth || 800, h = pic.naturalHeight || 600;
+          const swap = rot % 180 !== 0; c.width = swap ? h : w; c.height = swap ? w : h;
+          const ctx = c.getContext('2d'); ctx.filter = filt || 'none'; ctx.translate(c.width / 2, c.height / 2); ctx.rotate(rot * Math.PI / 180); ctx.drawImage(pic, -w / 2, -h / 2, w, h);
+          let data; try { data = c.toDataURL('image/png'); } catch (e) { Shell.toast('Photos', 'Couldn\'t export this image.', '⚠️'); return; }
+          if (data.length > 1.4 * 1048576) data = c.toDataURL('image/jpeg', .8);
+          const base = img.name.replace(/\.[^.]+$/, '') + ' (edited)';
+          const name = FS.uniqueName(HOME + '/Pictures', base, data.startsWith('data:image/png') ? '.png' : '.jpg');
+          FS.write(HOME + '/Pictures/' + name, data, data.startsWith('data:image/png') ? 'image/png' : 'image/jpeg');
+          Shell.toast('Photos', 'Saved ' + name, '💾');
+        });
+        let slide = null;
+        win.body.querySelector('.pv-slide').addEventListener('click', e => {
+          if (slide) { clearInterval(slide); slide = null; e.target.textContent = '▶ Slideshow'; return; }
+          e.target.textContent = '⏸ Stop'; if (!win.maxed) win.toggleMax();
+          slide = setInterval(() => { if (!win.body.isConnected) { clearInterval(slide); return; } viewing = (viewing + 1) % imgs.length; render(); }, 3000);
+          win._slide = slide;
+        });
+        if (win._slide && !slide) { slide = win._slide; win.body.querySelector('.pv-slide').textContent = '⏸ Stop'; win.body.querySelector('.pv-slide').addEventListener('click', () => { clearInterval(win._slide); win._slide = null; }, { once: true }); }
+        win.onClose(() => clearInterval(win._slide));
+        win.body.querySelector('.pv-del').addEventListener('click', () => { if (confirm('Move "' + img.name + '" to the Recycle Bin?')) { FS.recycle(img.path); viewing = -1; render(); } });
       } else {
         win.setTitle('Photos');
         win.body.innerHTML = `
@@ -1170,6 +1295,16 @@ Apps.register({
     ];
     function respond(q) {
       const l = q.toLowerCase().trim();
+      const tm = l.match(/(?:set )?(?:a )?timer (?:for )?(.+)/);
+      if (tm && parseDuration(tm[1])) { const s = parseDuration(tm[1]); Timers.add(s, 'Timer (' + tm[1].trim() + ')'); return 'Timer set for ' + Utils.fmtTime(s) + '. I\'ll ring. ⏲️'; }
+      const rm = l.match(/remind me (?:to )?(.+?) at (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/);
+      if (rm) { let [h, m] = rm[2].replace(/\s*(am|pm)/, '').split(':').map(Number); m = m || 0; if (/pm/.test(rm[2]) && h < 12) h += 12; if (/am/.test(rm[2]) && h === 12) h = 0; const hm = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); const d = new Date(); if (hm <= d.toTimeString().slice(0, 5)) d.setDate(d.getDate() + 1); CalendarStore.add({ title: rm[1].replace(/^to /, ''), date: d.toISOString().slice(0, 10), time: hm, remind: true, color: '#0078d4' }); return 'Okay, I\'ll remind you to ' + rm[1].replace(/^to /, '') + ' at ' + hm + '. It\'s on your Calendar. 📅'; }
+      if (/flip a coin|heads or tails/.test(l)) return Math.random() < .5 ? 'Heads! 🪙' : 'Tails! 🪙';
+      const dice = l.match(/roll (?:a |the )?(?:(\d+) )?(?:d(\d+)|dice|die)/);
+      if (dice) { const n = +dice[1] || 1, sides = +dice[2] || 6; const r = Array.from({ length: Math.min(n, 10) }, () => 1 + Math.floor(Math.random() * sides)); return '🎲 ' + r.join(', ') + (r.length > 1 ? ' (total ' + r.reduce((a, b) => a + b, 0) + ')' : ''); }
+      if (/screenshot|snip|capture (the )?screen/.test(l)) { setTimeout(() => Snip.capture(), 800); return 'Say cheese. 📸 (Win+Shift+S does this too.)'; }
+      const of = l.match(/^(?:open|find|show)(?: the)?(?: file)? (.+\.\w{2,4})$/);
+      if (of) { let hit = null; const walk = (p, n) => { for (const [k, v] of Object.entries(n.children || {})) { if (hit) return; if (v.type === 'file' && k.toLowerCase() === of[1].trim()) hit = p + '/' + k; else if (v.type === 'folder') walk(p + '/' + k, v); } }; walk(HOME, FS.get(HOME)); if (hit) { openFile(hit); return 'Opening ' + hit.split('/').pop() + '. 📂'; } return 'I couldn\'t find a file called "' + of[1].trim() + '" in your home folder.'; }
       // open apps
       const openM = l.match(/^(?:open|launch|start|run)\s+(.+)$/);
       if (openM) {
@@ -1322,8 +1457,11 @@ Apps.register({
           <h1>System</h1>
           <div class="set-card"><div class="set-info"><div class="set-t">Storage</div><div class="set-s">${Utils.fmtBytes(used * 2)} used of ~5 MB browser storage</div></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Display</div><div class="set-s">${window.innerWidth} × ${window.innerHeight}, ${window.devicePixelRatio}x scaling</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">System sounds</div><div class="set-s">Notification chime, timer bells, UI blips</div></div><div class="switch ${Settings.get('sounds') !== false ? 'on' : ''}" id="snd-sw"></div><button class="fluent-btn subtle" id="snd-test">Test</button></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Edge web proxy</div><div class="set-s">Optional. A tiny Cloudflare Worker that lets Edge show sites that normally refuse to be embedded — see <code>proxy/README.md</code> in the repo. Leave empty to load pages directly.</div></div><input class="fluent-input" id="edge-proxy" style="width:260px" placeholder="https://….workers.dev" value="${Utils.esc(Settings.get('edgeProxy') || '')}"></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Reset this PC</div><div class="set-s">Wipes files, settings and installed apps, restores defaults</div></div><button class="fluent-btn" style="background:#c42b1c" id="reset-pc">Reset</button></div>`;
+        content.querySelector('#snd-sw').addEventListener('click', () => { Settings.set('sounds', Settings.get('sounds') === false); renderContent(); });
+        content.querySelector('#snd-test').addEventListener('click', () => Shell.toast('Sound test', 'This is what a notification sounds like.', '🔔'));
         content.querySelector('#edge-proxy').addEventListener('change', e => {
           const v = e.target.value.trim().replace(/\/+$/, '');
           if (v && !/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/.test(v)) { Shell.toast('Settings', 'Proxy must be an https:// URL, e.g. https://name.workers.dev', '⚠️'); return; }
@@ -1365,9 +1503,12 @@ Apps.register({
           <h1>Accessibility</h1>
           <div class="set-card"><div class="set-info"><div class="set-t">Narrator</div><div class="set-s">Reads notifications and Clippy's tips aloud${'speechSynthesis' in window ? '' : ' (not supported in this browser)'}</div></div><div class="switch ${Settings.get('narrator') ? 'on' : ''}" data-k="narrator"></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Mouse pointer trails</div><div class="set-s">The 1998 experience, in rainbow</div></div><div class="switch ${Settings.get('cursorTrail') ? 'on' : ''}" data-k="cursorTrail"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Text size</div><div class="set-s">Scales the whole desktop</div></div><select class="fluent-input" id="txt-scale">${[1, 1.1, 1.25, 1.5].map(z => `<option value="${z}" ${+Settings.get('textScale') === z ? 'selected' : ''}>${Math.round(z * 100)}%</option>`).join('')}</select></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">High contrast</div><div class="set-s">Black background, bright text, yellow highlights</div></div><div class="switch ${Settings.get('highContrast') ? 'on' : ''}" data-k="highContrast"></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Emoji panel</div><div class="set-s">Press Win+. (or Win+;) in any text field</div></div><button class="fluent-btn subtle" id="emoji-try">Open</button></div>`;
         content.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => { Settings.set(s.dataset.k, !Settings.get(s.dataset.k)); renderContent(); }));
         content.querySelector('#emoji-try').addEventListener('click', () => setTimeout(() => EmojiPicker.toggle(), 50));
+        content.querySelector('#txt-scale').addEventListener('change', e => Settings.set('textScale', +e.target.value));
       } else if (sel === 'update') {
         const st = WinUpdate.state();
         const upToDate = st.installed && st.version === WinUpdate.VERSION;

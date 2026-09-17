@@ -24,6 +24,7 @@
     const upd = () => {
       const now = new Date();
       lockEl.querySelector('.lock-time').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const info = lockEl.querySelector('.lock-info'); if (info && typeof LockInfo !== 'undefined') info.innerHTML = LockInfo.html();
       lockEl.querySelector('.lock-date').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
     };
     upd();

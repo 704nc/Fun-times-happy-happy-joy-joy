@@ -1185,3 +1185,55 @@ html.theme-95 .switch::after { border-radius: 0; }
 .ach-hs { background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 4px 18px; }
 .ach-hs-t { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 4px; }
 .ach-hs-row { display: flex; justify-content: space-between; font-size: 13px; }
+
+/* ============ Tools: notepad, explorer, clock, lock info, high contrast, snip ============ */
+.np-findbar { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--stroke); background: var(--card-solid); flex-wrap: wrap; }
+.np-findbar .fluent-input { width: 160px; }
+.np-count { font-size: 12px; color: var(--text-2); }
+.np-findx { border: none; background: transparent; color: var(--text); margin-left: auto; }
+.np-wrap { font-size: 12px; display: flex; align-items: center; gap: 4px; padding: 0 6px; }
+.np-zoom { font-size: 12px; color: var(--text-2); min-width: 40px; text-align: center; }
+.np-bar { display: flex; gap: 20px; padding: 4px 12px; font-size: 12px; color: var(--text-2); border-top: 1px solid var(--stroke); background: var(--card-solid); }
+.np-bar span:last-child { margin-left: auto; }
+.fx-sort, .fx-search { border: 1px solid var(--stroke); background: var(--card-solid); color: var(--text); border-radius: 5px; padding: 4px 8px; font-size: 12px; }
+.fx-search { width: 150px; }
+.fx-view { border: none; background: transparent; color: var(--text); font-size: 14px; padding: 4px 8px; border-radius: 5px; }
+.fx-view:hover { background: var(--hover); }
+.fx-files.list { display: flex; flex-direction: column; gap: 0; padding: 4px 10px; }
+.fx-files.list .fx-item { flex-direction: row; width: 100%; height: 30px; padding: 0 8px; gap: 10px; text-align: left; border-radius: 4px; }
+.fx-files.list .fx-ico { font-size: 16px; width: 22px; text-align: center; }
+.fx-files.list .fx-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: 1; }
+.fx-meta { width: 110px; font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-props { position: absolute; inset: 0; background: rgba(0,0,0,.3); display: flex; align-items: center; justify-content: center; z-index: 5; }
+.fx-root { position: relative; }
+.fx-props-card { width: 380px; max-width: 92%; background: var(--surface-solid); border: 1px solid var(--stroke); border-radius: 8px; box-shadow: var(--shadow); padding: 16px; }
+.fx-props-head { display: flex; gap: 12px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--stroke); margin-bottom: 8px; }
+.fx-props-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 5px 0; }
+.fx-props-row span:first-child { color: var(--text-2); }
+.fx-props-row span:last-child { text-align: right; word-break: break-all; }
+.clk-tabs { display: flex; gap: 4px; padding: 8px 10px 0; border-bottom: 1px solid var(--stroke); }
+.clk-tabs button { border: none; background: transparent; color: var(--text-2); padding: 8px 12px; border-radius: 6px 6px 0 0; font-size: 13px; border-bottom: 2px solid transparent; }
+.clk-tabs button.sel { color: var(--text); border-bottom-color: var(--accent); }
+.clk-body { flex: 1; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px; }
+.clk-zones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+.clk-zone { background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 6px; padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+.clk-zone b { font-size: 16px; }
+.clk-laps { font-size: 13px; color: var(--text-2); width: 100%; text-align: center; }
+.clk-presets { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.clk-body .fluent-input { min-width: 0; }
+.clk-body > div { width: 100%; }
+.clk-list { display: flex; flex-direction: column; gap: 6px; }
+.clk-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 6px; font-size: 13px; }
+.clk-item.off { opacity: .55; }
+.clk-item button { border: none; background: transparent; color: var(--text-2); }
+.lock-info { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin-top: 22px; font-size: 14px; opacity: .92; }
+.lock-info span { background: rgba(0,0,0,.28); padding: 6px 12px; border-radius: 16px; backdrop-filter: blur(10px); }
+.snip-flash { position: fixed; inset: 0; z-index: 9999; background: #fff; pointer-events: none; animation: cam-flash .4s ease-out forwards; }
+html.hc { --surface: #000; --surface-solid: #000; --card: #000; --card-solid: #000; --text: #fff; --text-2: #ffff00; --stroke: #fff; --hover: #333; --active: #ffff00; --win-bg: #000; --accent: #ffff00; }
+html.hc .win, html.hc .shell-flyout, html.hc .toast, html.hc .set-card, html.hc .store-card, html.hc .fluent-btn { border: 2px solid #fff !important; }
+html.hc .fluent-btn { background: #000; color: #ffff00; }
+html.hc .tb-btn.active-win, html.hc .set-nav.sel, html.hc .ol-folder.sel, html.hc .start-app:hover { background: #ffff00; color: #000; }
+html.hc .desk-icon .di-label { background: #000; text-shadow: none; }
+html.hc #desktop { background-image: none !important; background-color: #000; }
+html.hc .switch.on { background: #ffff00; } html.hc .switch.on::after { background: #000; }
+.mine-cell { width: var(--ms-cell, 30px); height: var(--ms-cell, 30px); font-size: calc(var(--ms-cell, 30px) * .47); }

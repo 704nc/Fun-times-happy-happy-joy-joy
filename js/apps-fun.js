@@ -424,7 +424,7 @@ const Lock = {
     const el = Utils.el('div');
     el.id = 'lockscreen';
     el.className = 'relock';
-    el.innerHTML = `<div class="lock-center"><div class="lock-time"></div><div class="lock-date"></div></div><div class="lock-hint">Click anywhere or press any key to sign in</div>`;
+    el.innerHTML = `<div class="lock-center"><div class="lock-time"></div><div class="lock-date"></div><div class="lock-info">${typeof LockInfo !== 'undefined' ? LockInfo.html() : ''}</div></div><div class="lock-hint">Click anywhere or press any key to sign in</div>`;
     const wp = Settings.get('wallpaper');
     el.style.backgroundImage = `url('${wp.startsWith('custom:') ? wp.slice(7) : Wallpapers.uri(wp)}')`;
     const upd = () => {

@@ -58,7 +58,10 @@ const Settings = {
     narrator: false,
     cursorTrail: false,
     edgeProxy: '',
-    retro: ''
+    retro: '',
+    sounds: true,
+    textScale: 1,
+    highContrast: false
   },
   load() {
     try { this._data = Object.assign({}, this._defaults, JSON.parse(localStorage.getItem(this._key) || '{}')); }
