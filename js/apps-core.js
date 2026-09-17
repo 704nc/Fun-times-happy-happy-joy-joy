@@ -202,6 +202,8 @@ Apps.register({
         }
         if (FS.get(p) && FS.get(p).type === 'file') items.push({ label: 'Download to this computer', icon: '⬇️', fn: () => download(p) });
         items.push({ label: 'Properties', icon: 'ℹ️', fn: () => properties(it.dataset.n) });
+        if (/\.zip$/i.test(it.dataset.n)) items.splice(1, 0, { label: 'Extract all…', icon: '📂', fn: () => Zip.extract(p, p.replace(/\.zip$/i, '')).then(n => Shell.toast('File Explorer', 'Extracted ' + n + ' file(s) to ' + p.split('/').pop().replace(/\.zip$/i, ''), '🗜️')).catch(err => Shell.toast('File Explorer', 'Couldn\'t extract: ' + err.message, '⚠️')) });
+        else items.splice(items.findIndex(x => x.label === 'Rename'), 0, { label: 'Compress to ZIP file', icon: '🗜️', fn: () => Zip.compress(p).then(r => Shell.toast('File Explorer', r.name + ' created (' + r.count + ' files, ' + Utils.fmtBytes(r.size) + ') and downloaded.', '🗜️')).catch(err => Shell.toast('File Explorer', 'Couldn\'t compress: ' + err.message, '⚠️')) });
         if (FS.get(p) && FS.get(p).type === 'file') items.splice(1, 0, { label: 'Open with…', icon: '🧩', fn: () => setTimeout(() => Shell.contextMenu(e.clientX + 20, e.clientY + 10, OPEN_WITH.filter(([id]) => Apps.isInstalled(id)).map(([id, n]) => ({ label: n, icon: Apps.get(id).letter ? '' : Apps.get(id).icon, fn: () => Apps.launch(id, id === 'edge' ? { url: FS.get(p).content } : { path: p }) }))), 0) });
         items.splice(items.findIndex(x => x.label === 'Rename'), 0, { label: 'Copy', icon: '📋', fn: () => { FS._clip = { path: p, cut: false }; } }, { label: 'Cut', icon: '✂️', fn: () => { FS._clip = { path: p, cut: true }; } });
         items.push(
@@ -410,6 +412,7 @@ Apps.register({
     win.body.innerHTML = `<div class="term-root"></div>`;
     const root = win.body.querySelector('.term-root');
     let cwd = HOME;
+    win._termCwd = HOME;
     const termHist = [];
     const println = (s, color) => {
       const l = Utils.el('div', 't-line');
@@ -472,7 +475,7 @@ Apps.register({
         case 'cd': {
           if (!arg) { print(cwd.replace(/\//g, '\\')); break; }
           const t = resolve(arg), n = FS.get(t);
-          if (n && n.type === 'folder') cwd = t;
+          if (n && n.type === 'folder') { cwd = t; win._termCwd = t; }
           else print('The system cannot find the path specified.');
           break;
         }
@@ -1430,6 +1433,7 @@ Apps.register({
       accounts: { icon: '👤', name: 'Accounts' },
       accessibility: { icon: '♿', name: 'Accessibility' },
       fun: { icon: '🎉', name: 'Fun' },
+      gaming: { icon: '🎮', name: 'Gaming' },
       update: { icon: '🔄', name: 'Windows Update' },
       about: { icon: 'ℹ️', name: 'About' }
     };
@@ -1531,6 +1535,19 @@ Apps.register({
         content.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => { Settings.set(s.dataset.k, !Settings.get(s.dataset.k)); renderContent(); }));
         content.querySelector('#emoji-try').addEventListener('click', () => setTimeout(() => EmojiPicker.toggle(), 50));
         content.querySelector('#txt-scale').addEventListener('change', e => Settings.set('textScale', +e.target.value));
+      } else if (sel === 'gaming') {
+        const h = Store.get('win11.hiscores', {});
+        content.innerHTML = `
+          <h1>Gaming</h1>
+          <div class="set-card"><div class="set-info"><div class="set-t">Xbox Game Bar</div><div class="set-s">Press Win+G in any game for screenshots, FPS and achievements</div></div><button class="fluent-btn subtle" id="gb-open">Open</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">FPS counter</div><div class="set-s">Always-on frame counter in the corner</div></div><div class="switch ${Settings.get('fps') ? 'on' : ''}" id="fps-sw"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Game Mode</div><div class="set-s">Prioritizes games by politely asking other tabs to wait. (Does nothing. Feels good.)</div></div><div class="switch ${Settings.get('gameMode') ? 'on' : ''}" id="gm-sw"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Achievements</div><div class="set-s">${Achievements.score()} G • ${Object.keys(Achievements.unlocked()).length} of ${Achievements.list.length}</div></div><button class="fluent-btn" id="gm-ach">View</button></div>
+          <div class="set-card" style="flex-direction:column;align-items:stretch"><div class="set-info"><div class="set-t">High scores</div></div>${Object.keys(h).filter(k => h[k]).map(k => `<div class="stg-row"><span>${Utils.esc(k)}</span><div></div><b>${h[k]}</b></div>`).join('') || '<div class="set-s">No high scores yet.</div>'}</div>`;
+        content.querySelector('#gb-open').addEventListener('click', () => GameBar.toggle());
+        content.querySelector('#fps-sw').addEventListener('click', () => { Settings.set('fps', !Settings.get('fps')); renderContent(); });
+        content.querySelector('#gm-sw').addEventListener('click', () => { Settings.set('gameMode', !Settings.get('gameMode')); renderContent(); });
+        content.querySelector('#gm-ach').addEventListener('click', () => Apps.launch('xbox'));
       } else if (sel === 'update') {
         const st = WinUpdate.state();
         const upToDate = st.installed && st.version === WinUpdate.VERSION;

@@ -400,6 +400,7 @@ Apps.register({
         <div class="app-toolbar cam-bar">
           <select class="fluent-input cam-filter"><option value="none">No filter</option><option value="grayscale(1)">Noir</option><option value="sepia(.8)">Vintage</option><option value="saturate(2.2)">Vivid</option><option value="invert(1)">Negative</option><option value="hue-rotate(120deg)">Alien</option><option value="contrast(1.6) brightness(1.1)">Punchy</option><option value="blur(3px)">Dreamy</option></select>
           <button class="fluent-btn cam-snap">📸 Take photo</button>
+          <button class="fluent-btn subtle cam-rec">⏺ Record</button>
           <button class="fluent-btn subtle cam-flip" title="Switch camera">🔄</button>
           <button class="fluent-btn subtle" data-launch="photos">🏞️ Photos</button>
         </div>
@@ -421,6 +422,31 @@ Apps.register({
       });
     }
     win.body.querySelector('.cam-flip').addEventListener('click', () => { facing = facing === 'user' ? 'environment' : 'user'; start(); });
+    let rec = null, recT = null, recStart = 0;
+    const recBtn = win.body.querySelector('.cam-rec');
+    recBtn.addEventListener('click', () => {
+      if (rec) { rec.stop(); return; }
+      if (!stream || !window.MediaRecorder) { Shell.toast('Camera', 'No video feed to record.', '🎬'); return; }
+      const type = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+      const chunks = [];
+      try { rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond: 500000 }, type ? { mimeType: type } : {})); } catch (e) { Shell.toast('Camera', 'Recording isn\'t supported here.', '🎬'); return; }
+      rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      rec.onstop = () => {
+        clearInterval(recT); recBtn.textContent = '⏺ Record'; recBtn.classList.remove('rec');
+        const blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' }); rec = null;
+        const r = new FileReader();
+        r.onload = () => {
+          if (r.result.length > 1.4 * 1048576) { Shell.toast('Camera', 'Clip too large for browser storage (~1.4 MB). Keep it under ~15 seconds.', '⚠️'); return; }
+          const dir = HOME + '/Videos'; if (!FS.get(dir)) FS.mkdir(dir);
+          const now = new Date(); const name = FS.uniqueName(dir, 'Video ' + now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 8).replace(/:/g, '-'), /mp4/.test(blob.type) ? '.mp4' : '.webm');
+          FS.write(dir + '/' + name, r.result, blob.type); Achievements.unlock('director');
+          Shell.toast('Camera', 'Saved to Videos as ' + name, '🎬');
+        };
+        r.readAsDataURL(blob);
+      };
+      rec.start(500); recStart = Date.now(); recBtn.classList.add('rec');
+      recT = setInterval(() => { const s = Math.floor((Date.now() - recStart) / 1000); recBtn.textContent = '⏹ ' + Utils.fmtTime(s); if (s >= 20) rec.stop(); }, 250);
+    });
     win.body.querySelector('[data-launch]').addEventListener('click', () => Apps.launch('photos'));
     win.body.querySelector('.cam-snap').addEventListener('click', () => {
       if (!stream || !video.videoWidth) { Shell.toast('Camera', 'No video feed to capture.', '📷'); return; }
@@ -444,7 +470,7 @@ Apps.register({
       Shell.toast('Camera', 'Saved to Pictures › Camera Roll as ' + name, '📸');
       Achievements.unlock('photographer');
     });
-    win.onClose(stop);
+    win.onClose(() => { if (rec) rec.stop(); stop(); });
     start();
   }
 });

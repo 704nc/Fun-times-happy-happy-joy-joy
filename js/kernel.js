@@ -65,7 +65,8 @@ const Settings = {
     highContrast: false,
     wallpaperSlide: 0,
     dnd: false,
-    saver: false
+    saver: false,
+    fps: false
   },
   load() {
     try { this._data = Object.assign({}, this._defaults, JSON.parse(localStorage.getItem(this._key) || '{}')); }

@@ -22,6 +22,7 @@ const ChatStore = {
 
 function makeChatApp(cfg) {
   return function mount(win) {
+    if (!cfg._dm) { cfg._dm = true; cfg.bots.forEach(b => cfg.channels.push({ id: 'dm-' + b.name.replace(/\s+/g, '-').toLowerCase(), name: b.name, dm: b, topic: 'Direct message', seed: [[b.name, cfg.replies.greeting[0].replace('{user}', cfg.selfName)]] })); }
     let curCh = cfg.channels[0].id;
     const botTimers = [];
     win.body.innerHTML = `
@@ -55,14 +56,14 @@ function makeChatApp(cfg) {
     }
     function renderChannels() {
       $('.chat-channels').innerHTML = `<div class="chat-ch-group">${cfg.channelGroupLabel}</div>` +
-        cfg.channels.map(c => `<div class="chat-ch ${c.id === curCh ? 'sel' : ''}" data-id="${c.id}"><span>${cfg.channelPrefix}</span><span>${c.name}</span></div>`).join('') +
+        cfg.channels.filter(c => !c.dm).map(c => `<div class="chat-ch ${c.id === curCh ? 'sel' : ''}" data-id="${c.id}"><span>${cfg.channelPrefix}</span><span>${c.name}</span></div>`).join('') +
         `<div class="chat-ch-group">Direct messages</div>` +
-        cfg.bots.map(b => `<div class="chat-ch" style="opacity:.6"><span style="font-size:10px">🟢</span><span>${b.name}</span></div>`).join('');
+        cfg.channels.filter(c => c.dm).map(c => `<div class="chat-ch ${c.id === curCh ? 'sel' : ''}" data-id="${c.id}"><span style="font-size:10px">🟢</span><span>${c.name}</span></div>`).join('');
     }
     function renderMsgs() {
       const ch = channel();
-      $('.chat-main-head').innerHTML = `<span>${cfg.channelPrefix}${ch.name}</span><span class="topic">${ch.topic}</span>`;
-      input.placeholder = `Message ${cfg.channelPrefix}${ch.name}`;
+      $('.chat-main-head').innerHTML = `<span>${ch.dm ? '' : cfg.channelPrefix}${ch.name}</span><span class="topic">${ch.topic}</span>`;
+      input.placeholder = `Message ${ch.dm ? '' : cfg.channelPrefix}${ch.name}`;
       msgsEl.innerHTML = getMsgs().map(m => {
         const bot = cfg.bots.find(b => b.name === m.user);
         const av = bot ? bot.avatar : cfg.selfAvatar;
@@ -79,7 +80,7 @@ function makeChatApp(cfg) {
     });
     function botReply(userText) {
       const ch = curCh;
-      const bot = cfg.bots[Math.floor(Math.random() * cfg.bots.length)];
+      const bot = (channel().dm) || cfg.bots[Math.floor(Math.random() * cfg.bots.length)];
       const lower = userText.toLowerCase();
       let pool = cfg.replies.generic;
       if (/\?$/.test(userText.trim()) || /^(what|how|why|when|who|where|can|does|is|are)\b/.test(lower)) pool = cfg.replies.question;
@@ -247,6 +248,11 @@ Apps.register({
     const $ = s => win.body.querySelector(s);
     const content = $('.sp-content');
     const albums = [...new Map(Synth.tracks.map(t => [t.album, t])).values()];
+    const lib = () => Store.get('win11.spotify', { liked: [], playlists: [] });
+    const saveLib = l => Store.set('win11.spotify', l);
+    const isLiked = id => lib().liked.includes(id);
+    const toggleLike = id => { const l = lib(); l.liked = isLiked(id) ? l.liked.filter(x => x !== id) : l.liked.concat([id]); saveLib(l); render(); };
+    const addToPlaylist = (id, name) => { const l = lib(); let p = l.playlists.find(x => x.name === name); if (!p) { p = { name, ids: [] }; l.playlists.push(p); Achievements.unlock('curator'); } if (!p.ids.includes(id)) p.ids.push(id); saveLib(l); render(); Shell.toast('Spotify', 'Added to ' + name, '🎧'); };
 
     function trackRow(t, i) {
       const playing = Synth.current && Synth.current.id === t.id;
@@ -254,8 +260,10 @@ Apps.register({
         <div class="sp-num">${playing && Synth.isPlaying ? '▶' : i + 1}</div>
         <div class="sp-art" style="background:${t.color}">${t.art}</div>
         <div><div class="sp-rt">${t.title}</div><div class="sp-ra">${t.artist}</div></div>
+        <button class="sp-like ${isLiked(t.id) ? 'on' : ''}" data-like="${t.id}" title="Like">${isLiked(t.id) ? '💚' : '♡'}</button>
         <div class="sp-dur">${Utils.fmtTime(Synth.length(t))}</div></div>`;
     }
+    let plView = null;
     function render() {
       win.body.querySelectorAll('.sp-side-item').forEach(x => x.classList.toggle('sel', x.dataset.v === view));
       if (view === 'home') {
@@ -278,8 +286,14 @@ Apps.register({
         };
         inp.addEventListener('input', doSearch);
         doSearch();
+      } else if (view === 'playlist' && plView) {
+        const l = lib(); const tracks = plView === '__liked' ? Synth.tracks.filter(t => l.liked.includes(t.id)) : ((l.playlists.find(p => p.name === plView) || { ids: [] }).ids.map(id => Synth.tracks.find(t => t.id === id)).filter(Boolean));
+        content.innerHTML = `<h1>${plView === '__liked' ? '💚 Liked Songs' : Utils.esc(plView)} <span style="font-size:12px;color:#b3b3b3;font-weight:400">• ${tracks.length} songs</span></h1><div style="display:flex;gap:8px;margin:10px 0 16px"><button class="fluent-btn sp-playall" style="background:#1db954;color:#000">▶ Play</button>${plView !== '__liked' ? '<button class="fluent-btn subtle sp-delpl" style="background:#242424;color:#fff;border-color:#444">Delete playlist</button>' : ''}</div>${tracks.map(trackRow).join('') || '<div class="sp-sub">Nothing here yet. Right-click a track to add it.</div>'}`;
+        content.querySelector('.sp-playall').addEventListener('click', () => { if (tracks.length) { Synth.setQueue(tracks); Synth.play(tracks[0], 0); } });
+        const del = content.querySelector('.sp-delpl'); if (del) del.addEventListener('click', () => { const l2 = lib(); l2.playlists = l2.playlists.filter(p => p.name !== plView); saveLib(l2); view = 'library'; render(); });
       } else {
-        content.innerHTML = `<h1>Your Library</h1><div class="sp-sub">Albums</div>
+        const l = lib();
+        content.innerHTML = `<h1>Your Library</h1><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px"><div class="sp-pl" data-pl="__liked">💚 Liked Songs <small>${l.liked.length}</small></div>${l.playlists.map(p => `<div class="sp-pl" data-pl="${Utils.esc(p.name)}">🎧 ${Utils.esc(p.name)} <small>${p.ids.length}</small></div>`).join('')}<div class="sp-pl sp-newpl">＋ New playlist</div></div><div class="sp-sub">Albums</div>
           ${albums.map(a => {
             const tracks = Synth.tracks.filter(t => t.album === a.album);
             return `<div style="margin-bottom:24px"><h1 style="font-size:18px;margin-bottom:8px">${a.album} <span style="font-size:12px;color:#b3b3b3;font-weight:400">• ${a.artist} • ${tracks.length} songs</span></h1>${tracks.map(trackRow).join('')}</div>`;
@@ -291,6 +305,9 @@ Apps.register({
       if (it) { view = it.dataset.v; render(); }
     });
     content.addEventListener('click', e => {
+      const like = e.target.closest('[data-like]'); if (like) { e.stopPropagation(); toggleLike(like.dataset.like); return; }
+      const np = e.target.closest('.sp-newpl'); if (np) { const name = prompt('Playlist name:', 'My Playlist #' + (lib().playlists.length + 1)); if (name && name.trim()) { const l = lib(); if (!l.playlists.some(p => p.name === name.trim())) { l.playlists.push({ name: name.trim(), ids: [] }); Achievements.unlock('curator'); } saveLib(l); plView = name.trim(); view = 'playlist'; render(); } return; }
+      const pl = e.target.closest('.sp-pl'); if (pl) { plView = pl.dataset.pl; view = 'playlist'; render(); return; }
       const card = e.target.closest('.sp-card');
       if (card) {
         const list = Synth.tracks.filter(t => t.album === card.dataset.album);
@@ -304,6 +321,18 @@ Apps.register({
         if (Synth.current && Synth.current.id === t.id) Synth.toggle();
         else { Synth.setQueue(Synth.tracks); Synth.play(t, 0); }
       }
+    });
+    content.addEventListener('contextmenu', e => {
+      const row = e.target.closest('.sp-row'); if (!row) return;
+      e.preventDefault();
+      const t = Synth.tracks.find(x => x.id === row.dataset.id), l = lib();
+      Shell.contextMenu(e.clientX, e.clientY, [
+        { label: 'Play', icon: '▶', fn: () => { Synth.setQueue(Synth.tracks); Synth.play(t, 0); } },
+        { label: isLiked(t.id) ? 'Remove from Liked Songs' : 'Save to Liked Songs', icon: '💚', fn: () => toggleLike(t.id) },
+        { sep: true },
+        ...l.playlists.map(p => ({ label: 'Add to ' + p.name, icon: '🎧', fn: () => addToPlaylist(t.id, p.name) })),
+        { label: 'Add to new playlist…', icon: '＋', fn: () => { const name = prompt('Playlist name:', 'My Playlist #' + (l.playlists.length + 1)); if (name && name.trim()) addToPlaylist(t.id, name.trim()); } }
+      ]);
     });
     $('.sp-play').addEventListener('click', () => {
       if (Synth.current) Synth.toggle();
