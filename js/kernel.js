@@ -56,7 +56,8 @@ const Settings = {
     neko: false,
     avatar: '',
     narrator: false,
-    cursorTrail: false
+    cursorTrail: false,
+    edgeProxy: ''
   },
   load() {
     try { this._data = Object.assign({}, this._defaults, JSON.parse(localStorage.getItem(this._key) || '{}')); }

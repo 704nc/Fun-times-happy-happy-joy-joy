@@ -889,3 +889,30 @@ html.no-dwm .win-titlebar { background: #000080 !important; color: #fff !importa
 .sol-win { position: absolute; inset: 0; display: none; background: rgba(0,0,0,.25); }
 .sol-stat { font-size: 12px; color: var(--text-2); }
 @media (max-width: 640px) { .sol-root { --cw: 44px; --ch: 62px; } .sol-top, .sol-tab { gap: 5px; } .card { font-size: 10px; } .card .c-c { font-size: 20px; } .sol-pile.tab { min-height: calc(var(--ch) + 200px); } }
+
+/* ============ Edge: tabs, bookmarks, banner ============ */
+.edge-tabs { flex: none; display: flex; align-items: flex-end; gap: 2px; padding: 6px 8px 0; background: var(--surface-solid); }
+.edge-tablist { display: flex; gap: 2px; overflow: hidden; flex: 1; min-width: 0; }
+.edge-tab { display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 10px; border-radius: 8px 8px 0 0; font-size: 12px; max-width: 200px; min-width: 60px; flex: 1; background: transparent; color: var(--text-2); }
+.edge-tab.sel { background: var(--card-solid); color: var(--text); box-shadow: 0 -1px 0 var(--stroke); }
+.edge-tab:not(.sel):hover { background: var(--hover); }
+.edge-tab .et-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edge-tab .et-close { border: none; background: transparent; color: inherit; font-size: 10px; padding: 2px 5px; border-radius: 3px; opacity: .6; }
+.edge-tab .et-close:hover { background: var(--active); opacity: 1; }
+.eg-newtab { border: none; background: transparent; color: var(--text); width: 26px; height: 26px; border-radius: 5px; font-size: 16px; margin-bottom: 2px; }
+.eg-newtab:hover { background: var(--hover); }
+.edge-bar .eg-shield.on { color: var(--accent); }
+.edge-bm { flex: none; display: flex; gap: 4px; padding: 4px 10px; border-bottom: 1px solid var(--stroke); background: var(--card-solid); overflow-x: auto; scrollbar-width: none; }
+.edge-bm::-webkit-scrollbar { display: none; }
+.edge-bm .bm { border: none; background: transparent; color: var(--text); font-size: 12px; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+.edge-bm .bm:hover { background: var(--hover); }
+.bm-empty { font-size: 12px; color: var(--text-2); padding: 3px 4px; }
+.edge-banner { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px; background: #fff4ce; color: #4a3b00; border-bottom: 1px solid #e6d28a; }
+html.dark .edge-banner { background: #4a3f12; color: #ffe9a3; border-bottom-color: #6e5d1c; }
+.edge-banner span { flex: 1; }
+.edge-banner button { border: 1px solid rgba(0,0,0,.2); background: rgba(255,255,255,.5); color: inherit; border-radius: 4px; padding: 3px 9px; font-size: 12px; }
+.edge-banner .eb-x { border: none; background: transparent; }
+.edge-search { display: flex; align-items: center; gap: 10px; max-width: 560px; margin: 0 auto 26px; background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 24px; padding: 0 18px; height: 46px; box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.edge-search input { flex: 1; border: none; background: transparent; color: var(--text); font-size: 15px; outline: none; }
+.edge-note code { background: var(--hover); padding: 1px 5px; border-radius: 3px; }
+@media (max-width: 640px) { .edge-tab { min-width: 40px; } .edge-banner span { font-size: 11px; } }

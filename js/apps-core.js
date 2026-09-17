@@ -940,58 +940,168 @@ Apps.register({
 Apps.register({
   id: 'edge', name: 'Microsoft Edge', icon: '🌐', color: 'linear-gradient(135deg,#35d0c0,#0b6fbf)',
   category: 'System', width: 960, height: 620,
-  mount(win) {
+  onArgs(win, args) { if (args && args.url) win._edgeOpen(args.url); },
+  mount(win, args) {
+    // sites known to allow embedding — no "blank page?" banner for these
+    const FRIENDLY = /(^|\.)(example\.com|wikipedia\.org|wikimedia\.org|openstreetmap\.org|archive\.org|duckduckgo\.com|bing\.com|codepen\.io|jsfiddle\.net|w3schools\.com|mdn\.dev|developer\.mozilla\.org|neverssl\.com)$/i;
+    const DEFAULT_BM = [
+      { name: 'Wikipedia', url: 'https://en.wikipedia.org/wiki/Special:Random', ico: '📚' },
+      { name: 'Maps', url: 'https://www.openstreetmap.org/export/embed.html?bbox=-0.15,51.49,-0.09,51.52', ico: '🗺️' },
+      { name: 'Archive.org', url: 'https://archive.org', ico: '🏛️' },
+      { name: 'DuckDuckGo', url: 'https://duckduckgo.com/html/', ico: '🦆' },
+      { name: 'MDN', url: 'https://developer.mozilla.org/', ico: '📖' },
+      { name: 'Example', url: 'https://example.com', ico: '📄' }
+    ];
+    let bookmarks = Store.get('win11.edge.bookmarks', null) || DEFAULT_BM.slice();
+    const saveBm = () => Store.set('win11.edge.bookmarks', bookmarks);
+    const tabs = []; let cur = -1, seq = 0;
+    const proxyUrl = () => String(Settings.get('edgeProxy') || '').trim().replace(/\/+$/, '');
     win.body.innerHTML = `
       <div class="edge-root">
+        <div class="edge-tabs"><div class="edge-tablist"></div><button class="eg-newtab" title="New tab">+</button></div>
         <div class="edge-bar">
-          <button class="eg-back">←</button><button class="eg-fwd">→</button><button class="eg-reload">⟳</button><button class="eg-home">🏠</button>
-          <input class="eg-url" placeholder="Search or enter web address" spellcheck="false">
+          <button class="eg-back" title="Back">←</button><button class="eg-fwd" title="Forward">→</button><button class="eg-reload" title="Reload">⟳</button><button class="eg-home" title="Home">🏠</button>
+          <input class="eg-url" placeholder="Search or enter web address" spellcheck="false" autocomplete="off">
+          <button class="eg-star" title="Bookmark this page">☆</button>
+          <button class="eg-shield" title="Proxy off">🛡️</button>
+          <button class="eg-ext" title="Open in a new browser tab">↗</button>
         </div>
+        <div class="edge-bm"></div>
+        <div class="edge-banner" style="display:none"><span>Blank page? This site refuses to be embedded (that's the site's rule, not a bug).</span><button class="eb-ext">Open in new tab</button><button class="eb-proxy" style="display:none">Load via proxy</button><button class="eb-setup" style="display:none">Set up proxy…</button><button class="eb-x" title="Dismiss">✕</button></div>
         <div class="edge-view">
           <iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style="display:none"></iframe>
           <div class="edge-home">
             <h1>Where to next?</h1>
-            <div class="edge-tiles">
-              <div class="edge-tile" data-url="https://example.com"><div class="et-ico">📄</div><div class="et-name">Example</div></div>
-              <div class="edge-tile" data-url="https://www.openstreetmap.org/export/embed.html?bbox=-0.15,51.49,-0.09,51.52"><div class="et-ico">🗺️</div><div class="et-name">Maps</div></div>
-              <div class="edge-tile" data-url="https://en.wikipedia.org/wiki/Special:Random"><div class="et-ico">📚</div><div class="et-name">Wikipedia</div></div>
-              <div class="edge-tile" data-url="https://archive.org"><div class="et-ico">🏛️</div><div class="et-name">Archive.org</div></div>
-              <div class="edge-tile" data-url="https://duckduckgo.com/html/"><div class="et-ico">🦆</div><div class="et-name">DuckDuckGo</div></div>
-            </div>
-            <div class="edge-note">Heads-up: this browser-in-a-browser loads pages in an iframe, and many sites (Google, YouTube, Bing…) refuse to be embedded and will show a blank page. The tiles above usually work. That's a web security rule, not a bug. 🙂</div>
+            <div class="edge-search"><span>🔍</span><input placeholder="Search the web with DuckDuckGo" spellcheck="false"></div>
+            <div class="edge-tiles"></div>
+            <div class="edge-note"></div>
           </div>
         </div>
       </div>`;
     const $ = s => win.body.querySelector(s);
-    const frame = $('iframe'), home = $('.edge-home'), url = $('.eg-url');
-    const hist = []; let hIdx = -1;
+    const frame = $('iframe'), home = $('.edge-home'), url = $('.eg-url'), banner = $('.edge-banner');
+    const tab = () => tabs[cur];
+    const isProxy = u => proxyUrl() && u.startsWith(proxyUrl());
+    const unproxy = u => { if (!isProxy(u)) return u; try { return new URL(u).searchParams.get('url') || u; } catch (e) { return u; } };
+    const viaProxy = u => proxyUrl() ? proxyUrl() + '/?url=' + encodeURIComponent(u) : u;
+
+    function renderTabs() {
+      $('.edge-tablist').innerHTML = tabs.map((t, i) => `<div class="edge-tab ${i === cur ? 'sel' : ''}" data-i="${i}"><span class="et-fav">${t.url ? '🌐' : '✨'}</span><span class="et-title">${Utils.esc(t.title || 'New tab')}</span><button class="et-close" title="Close tab">✕</button></div>`).join('');
+      win.setTitle((tab() && tab().title ? tab().title + ' - ' : '') + 'Microsoft Edge');
+    }
+    function renderBm() {
+      $('.edge-bm').innerHTML = bookmarks.map((b, i) => `<button class="bm" data-i="${i}" title="${Utils.esc(b.url)}">${b.ico || '🔖'} ${Utils.esc(b.name)}</button>`).join('') || '<span class="bm-empty">Bookmarks you ☆ will show up here</span>';
+      $('.edge-tiles').innerHTML = bookmarks.slice(0, 8).map((b, i) => `<div class="edge-tile" data-i="${i}"><div class="et-ico">${b.ico || '🔖'}</div><div class="et-name">${Utils.esc(b.name)}</div></div>`).join('');
+      $('.edge-note').innerHTML = proxyUrl()
+        ? 'Pages load through your proxy, so most sites work. Logins and heavy web apps may still misbehave. Use 🛡️ to load a page directly instead.'
+        : 'Heads-up: this browser-in-a-browser loads pages in an iframe, and many sites (Google, YouTube, Reddit…) refuse to be embedded and show a blank page. The tiles above work. To make more sites load, set up the optional proxy in <b>Settings → System</b>.';
+      const t = tab();
+      $('.eg-star').textContent = t && t.url && bookmarks.some(b => b.url === t.url) ? '★' : '☆';
+    }
+    function showBanner(u) {
+      let host = ''; try { host = new URL(u).hostname; } catch (e) {}
+      const t = tab();
+      if (!u || t.direct === false || FRIENDLY.test(host) || t.dismissed === u) { banner.style.display = 'none'; return; }
+      banner.style.display = 'flex';
+      $('.eb-proxy').style.display = proxyUrl() ? '' : 'none';
+      $('.eb-setup').style.display = proxyUrl() ? 'none' : '';
+    }
+    function load(t) {
+      // t.url is the real page url; t.direct === false means "load through the proxy"
+      const useProxy = proxyUrl() && t.direct !== true;
+      t.direct = useProxy ? false : true;
+      $('.eg-shield').textContent = useProxy ? '🛡️' : '🔓';
+      $('.eg-shield').title = useProxy ? 'Loading via proxy — click to load directly' : (proxyUrl() ? 'Loading directly — click to use proxy' : 'No proxy configured (Settings → System)');
+      $('.eg-shield').classList.toggle('on', !!useProxy);
+      frame.src = useProxy ? viaProxy(t.url) : t.url;
+      home.style.display = 'none'; frame.style.display = 'block';
+      url.value = t.url;
+      try { t.title = new URL(t.url).hostname.replace(/^www\./, ''); } catch (e) { t.title = t.url; }
+      showBanner(useProxy ? '' : t.url);
+      renderTabs(); renderBm();
+    }
     function go(u, skipHist) {
       if (!u) return;
-      if (!/^https?:\/\//i.test(u)) {
-        u = /\.\w{2,}($|\/)/.test(u) ? 'https://' + u : 'https://duckduckgo.com/html/?q=' + encodeURIComponent(u);
-      }
-      if (!skipHist) { hist.splice(hIdx + 1); hist.push(u); hIdx = hist.length - 1; }
-      url.value = u;
-      home.style.display = 'none';
-      frame.style.display = 'block';
-      frame.src = u;
-      win.setTitle('Microsoft Edge');
+      u = u.trim();
+      if (!/^https?:\/\//i.test(u)) u = /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(u) ? 'https://' + u : 'https://duckduckgo.com/html/?q=' + encodeURIComponent(u);
+      const t = tab();
+      if (!skipHist) { t.hist.splice(t.hIdx + 1); t.hist.push(u); t.hIdx = t.hist.length - 1; }
+      t.url = u; t.direct = undefined;
+      load(t);
     }
     function goHome() {
-      frame.src = 'about:blank';
-      frame.style.display = 'none';
-      home.style.display = 'block';
-      url.value = '';
+      const t = tab();
+      t.url = ''; t.title = '';
+      frame.src = 'about:blank'; frame.style.display = 'none'; home.style.display = 'block';
+      url.value = ''; banner.style.display = 'none';
+      renderTabs(); renderBm();
+      setTimeout(() => $('.edge-search input').focus(), 50);
     }
-    url.addEventListener('keydown', e => { if (e.key === 'Enter') go(url.value.trim()); });
-    home.addEventListener('click', e => {
-      const t = e.target.closest('.edge-tile');
-      if (t) go(t.dataset.url);
+    function newTab(u) {
+      tabs.push({ id: ++seq, url: '', title: '', hist: [], hIdx: -1 });
+      cur = tabs.length - 1;
+      if (u) go(u); else goHome();
+    }
+    function switchTab(i) {
+      cur = i;
+      const t = tab();
+      if (t.url) load(t); else goHome();
+    }
+    function closeTab(i) {
+      tabs.splice(i, 1);
+      if (!tabs.length) { win.close(); return; }
+      switchTab(Math.min(i, tabs.length - 1));
+    }
+    // listen for the proxied page navigating: keep the address bar honest (same-origin only, so best-effort)
+    frame.addEventListener('load', () => {
+      try { const real = unproxy(frame.contentWindow.location.href); if (real && real !== 'about:blank' && tab()) { tab().url = real; url.value = real; } } catch (e) {}
+    });
+    win._edgeOpen = u => newTab(u);
+    url.addEventListener('keydown', e => { if (e.key === 'Enter') go(url.value); });
+    url.addEventListener('focus', () => url.select());
+    $('.edge-search input').addEventListener('keydown', e => { if (e.key === 'Enter') go(e.target.value); });
+    $('.edge-tiles').addEventListener('click', e => { const t = e.target.closest('.edge-tile'); if (t) go(bookmarks[+t.dataset.i].url); });
+    $('.edge-bm').addEventListener('click', e => { const b = e.target.closest('.bm'); if (b) go(bookmarks[+b.dataset.i].url); });
+    $('.edge-bm').addEventListener('contextmenu', e => {
+      const b = e.target.closest('.bm'); if (!b) return;
+      e.preventDefault();
+      const i = +b.dataset.i;
+      Shell.contextMenu(e.clientX, e.clientY, [
+        { label: 'Open', icon: '🌐', fn: () => go(bookmarks[i].url) },
+        { label: 'Open in new tab', icon: '➕', fn: () => newTab(bookmarks[i].url) },
+        { label: 'Rename', icon: '✏️', fn: () => { const n = prompt('Bookmark name:', bookmarks[i].name); if (n) { bookmarks[i].name = n.trim(); saveBm(); renderBm(); } } },
+        { sep: true },
+        { label: 'Delete', icon: '🗑️', fn: () => { bookmarks.splice(i, 1); saveBm(); renderBm(); } }
+      ]);
+    });
+    $('.edge-tabs').addEventListener('click', e => {
+      if (e.target.closest('.eg-newtab')) { newTab(); return; }
+      const t = e.target.closest('.edge-tab'); if (!t) return;
+      if (e.target.closest('.et-close')) closeTab(+t.dataset.i); else switchTab(+t.dataset.i);
     });
     $('.eg-home').addEventListener('click', goHome);
-    $('.eg-reload').addEventListener('click', () => { if (frame.style.display !== 'none') frame.src = frame.src; });
-    $('.eg-back').addEventListener('click', () => { if (hIdx > 0) { hIdx--; go(hist[hIdx], true); } else goHome(); });
-    $('.eg-fwd').addEventListener('click', () => { if (hIdx < hist.length - 1) { hIdx++; go(hist[hIdx], true); } });
+    $('.eg-reload').addEventListener('click', () => { if (tab().url) load(tab()); });
+    $('.eg-back').addEventListener('click', () => { const t = tab(); if (t.hIdx > 0) { t.hIdx--; t.url = t.hist[t.hIdx]; t.direct = undefined; load(t); } else goHome(); });
+    $('.eg-fwd').addEventListener('click', () => { const t = tab(); if (t.hIdx < t.hist.length - 1) { t.hIdx++; t.url = t.hist[t.hIdx]; t.direct = undefined; load(t); } });
+    $('.eg-star').addEventListener('click', () => {
+      const t = tab(); if (!t.url) return;
+      const i = bookmarks.findIndex(b => b.url === t.url);
+      if (i >= 0) bookmarks.splice(i, 1); else bookmarks.push({ name: t.title || t.url, url: t.url, ico: '🔖' });
+      saveBm(); renderBm();
+    });
+    $('.eg-shield').addEventListener('click', () => {
+      const t = tab(); if (!t.url) return;
+      if (!proxyUrl()) { Shell.toast('Microsoft Edge', 'No proxy configured. Add one under Settings → System → Edge web proxy.', '🛡️'); return; }
+      t.direct = t.direct === false ? true : undefined; t.dismissed = null; load(t);
+    });
+    const openExt = () => { const t = tab(); if (t.url) window.open(t.url, '_blank', 'noopener'); };
+    $('.eg-ext').addEventListener('click', openExt);
+    $('.eb-ext').addEventListener('click', openExt);
+    $('.eb-proxy').addEventListener('click', () => { const t = tab(); t.direct = undefined; load(t); });
+    $('.eb-setup').addEventListener('click', () => Apps.launch('settings', { section: 'system' }));
+    $('.eb-x').addEventListener('click', () => { tab().dismissed = tab().url; banner.style.display = 'none'; });
+    Bus.on('settings:edgeProxy', () => { if (win.body.isConnected) { renderBm(); if (tab() && tab().url) { tab().direct = undefined; tab().dismissed = null; load(tab()); } } });
+    newTab(args && args.url);
   }
 });
 
@@ -1096,7 +1206,8 @@ Apps.register({
 Apps.register({
   id: 'settings', name: 'Settings', icon: '⚙️', color: 'linear-gradient(135deg,#9aa7b8,#5c6b7d)',
   category: 'System', width: 900, height: 600, singleton: true,
-  mount(win) {
+  onArgs(win, args) { if (args && args.section && win._setGo) win._setGo(args.section); },
+  mount(win, args) {
     const sections = {
       personalization: { icon: '🎨', name: 'Personalization' },
       system: { icon: '🖥️', name: 'System' },
@@ -1106,7 +1217,7 @@ Apps.register({
       fun: { icon: '🎉', name: 'Fun' },
       about: { icon: 'ℹ️', name: 'About' }
     };
-    let sel = 'personalization';
+    let sel = (args && args.section) || 'personalization';
     win.body.innerHTML = `<div class="set-root"><div class="set-side"></div><div class="set-content"></div></div>`;
     const side = win.body.querySelector('.set-side');
     const content = win.body.querySelector('.set-content');
@@ -1145,7 +1256,14 @@ Apps.register({
           <h1>System</h1>
           <div class="set-card"><div class="set-info"><div class="set-t">Storage</div><div class="set-s">${Utils.fmtBytes(used * 2)} used of ~5 MB browser storage</div></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Display</div><div class="set-s">${window.innerWidth} × ${window.innerHeight}, ${window.devicePixelRatio}x scaling</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Edge web proxy</div><div class="set-s">Optional. A tiny Cloudflare Worker that lets Edge show sites that normally refuse to be embedded — see <code>proxy/README.md</code> in the repo. Leave empty to load pages directly.</div></div><input class="fluent-input" id="edge-proxy" style="width:260px" placeholder="https://….workers.dev" value="${Utils.esc(Settings.get('edgeProxy') || '')}"></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Reset this PC</div><div class="set-s">Wipes files, settings and installed apps, restores defaults</div></div><button class="fluent-btn" style="background:#c42b1c" id="reset-pc">Reset</button></div>`;
+        content.querySelector('#edge-proxy').addEventListener('change', e => {
+          const v = e.target.value.trim().replace(/\/+$/, '');
+          if (v && !/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/.test(v)) { Shell.toast('Settings', 'Proxy must be an https:// URL, e.g. https://name.workers.dev', '⚠️'); return; }
+          Settings.set('edgeProxy', v);
+          Shell.toast('Settings', v ? 'Edge will load pages through ' + v : 'Edge proxy removed.', '🛡️');
+        });
         content.querySelector('#reset-pc').addEventListener('click', () => {
           if (confirm('Reset Windows 11 Web? All your files and settings will be erased.')) {
             localStorage.removeItem('win11.fs');
@@ -1210,6 +1328,7 @@ Apps.register({
           <div class="set-card"><div class="set-info"><div class="set-t">Installed RAM</div><div class="set-s">${navigator.deviceMemory ? navigator.deviceMemory + ' GB (as reported by the browser)' : 'Plenty'}</div></div></div>`;
       }
     }
+    win._setGo = id => { if (sections[id]) { sel = id; renderSide(); renderContent(); } };
     renderSide(); renderContent();
   }
 });

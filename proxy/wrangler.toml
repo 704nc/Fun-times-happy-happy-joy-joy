@@ -1,0 +1,7 @@
+name = "win11-web-proxy"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Optional: only serve requests coming from your site (comma-separated origins).
+# [vars]
+# ALLOWED_ORIGINS = "https://YOURNAME.github.io"
