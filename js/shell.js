@@ -95,7 +95,7 @@ const Shell = {
     const pinnedIds = ['edge', 'word', 'excel', 'powerpoint', 'store', 'photos', 'settings', 'explorer', 'copilot', 'spotify', 'slack', 'discord', 'mediaplayer', 'notepad', 'paint', 'calculator', 'terminal'];
     const pinned = pinnedIds.map(id => Apps.get(id)).filter(a => a && Apps.isInstalled(a.id));
     const extra = visible.filter(a => !pinnedIds.includes(a.id));
-    document.getElementById('start-pinned').innerHTML = pinned.concat(extra).slice(0, 18).map(a =>
+    document.getElementById('start-pinned').innerHTML = pinned.concat(extra).slice(0, 24).map(a =>
       `<div class="start-app" data-launch="${a.id}">${appTileHTML(a)}<span class="lbl">${a.name}</span></div>`).join('');
     // recommended: recent docs
     const recDocs = FS.list(HOME + '/Documents').filter(f => f.node.type === 'file').slice(0, 4);

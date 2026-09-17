@@ -34,6 +34,7 @@ Apps.register({
           <div class="fx-breadcrumb"></div>
           <button class="fx-newfolder">➕ New folder</button>
           <button class="fx-newfile">📄 New file</button>
+          <label class="fx-upload" title="Upload files from your computer">⬆️ Upload<input type="file" multiple style="display:none"></label>
         </div>
         <div class="fx-main">
           <div class="fx-side"></div>
@@ -95,6 +96,38 @@ Apps.register({
     });
     const files = $('.fx-files');
     const inBin = () => cwd === FS.binPath || cwd.startsWith(FS.binPath + '/');
+    // import real files (upload button or drag-and-drop from the OS)
+    function importFiles(list) {
+      if (inBin()) { Shell.toast('File Explorer', 'You can\'t put files straight into the Recycle Bin. Well, you can, but why?', '🗑️'); return; }
+      let n = 0;
+      [...list].forEach(f => {
+        if (f.size > 1.5 * 1048576) { Shell.toast('File Explorer', f.name + ' is too large (max 1.5 MB — browser storage is limited).', '⚠️'); return; }
+        const r = new FileReader();
+        const isText = /^text\/|json|xml|javascript/.test(f.type) || /\.(txt|md|csv|json|js|css|html?|log|xml|ini|cfg)$/i.test(f.name);
+        r.onload = () => {
+          const dot = f.name.lastIndexOf('.');
+          const base = dot > 0 ? f.name.slice(0, dot) : f.name, ext = dot > 0 ? f.name.slice(dot) : '';
+          FS.write(cwd + '/' + FS.uniqueName(cwd, base, ext), r.result, f.type || (isText ? 'text/plain' : 'application/octet-stream'));
+          if (++n === 1) Achievements.unlock('uploader');
+        };
+        isText ? r.readAsText(f) : r.readAsDataURL(f);
+      });
+    }
+    $('.fx-upload input').addEventListener('change', e => { importFiles(e.target.files); e.target.value = ''; });
+    ['dragenter', 'dragover'].forEach(ev => files.addEventListener(ev, e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); files.classList.add('drop'); } }));
+    files.addEventListener('dragleave', () => files.classList.remove('drop'));
+    files.addEventListener('drop', e => { e.preventDefault(); files.classList.remove('drop'); if (e.dataTransfer.files.length) importFiles(e.dataTransfer.files); });
+    function download(path) {
+      const n = FS.get(path); if (!n || n.type !== 'file') return;
+      const name = path.split('/').pop();
+      let href;
+      if (/^data:/.test(String(n.content))) href = n.content;
+      else if (/\.(doc|xls|ppt)$/i.test(name)) href = URL.createObjectURL(new Blob([String(n.content)], { type: 'text/html' }));
+      else href = URL.createObjectURL(new Blob([String(n.content)], { type: n.mime || 'text/plain' }));
+      const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      if (href.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(href), 5000);
+    }
+    win._fxDownload = download;
     files.addEventListener('click', e => {
       const it = e.target.closest('.fx-item');
       files.querySelectorAll('.fx-item').forEach(x => x.classList.remove('sel'));
@@ -125,6 +158,7 @@ Apps.register({
         if (/\.(png|jpe?g|svg|gif|bmp|webp)$/i.test(it.dataset.n)) {
           items.push({ label: 'Edit in Paint', icon: '🎨', fn: () => Apps.launch('paint', { path: p }) });
         }
+        if (FS.get(p) && FS.get(p).type === 'file') items.push({ label: 'Download to this computer', icon: '⬇️', fn: () => download(p) });
         items.push(
           { label: 'Rename', icon: '✏️', fn: () => {
             const n = prompt('Rename to:', it.dataset.n);
@@ -143,6 +177,7 @@ Apps.register({
         Shell.contextMenu(e.clientX, e.clientY, [
           { label: 'New folder', icon: '📁', fn: () => FS.mkdir(cwd + '/' + FS.uniqueName(cwd, 'New folder', '')) },
           { label: 'New text file', icon: '📄', fn: () => FS.write(cwd + '/' + FS.uniqueName(cwd, 'New Text Document', '.txt'), '', 'text/plain') },
+          { label: 'Upload files…', icon: '⬆️', fn: () => $('.fx-upload input').click() },
           { label: 'Refresh', icon: '🔄', fn: render }
         ]);
       }
@@ -1167,6 +1202,12 @@ Apps.register({
       if (/achievement|trophy|gamerscore/.test(l)) { Apps.launch('xbox'); return 'You\'ve earned ' + Achievements.score() + ' G so far. Here\'s the full list. 🏆'; }
       if (/screensaver|screen saver/.test(l)) { setTimeout(() => Screensaver.start(), 600); return 'Starting the screensaver. Move the mouse to come back. 🫧'; }
       if (/lock (the )?(pc|screen|computer)|^lock$/.test(l)) { setTimeout(() => Lock.show(), 400); return 'Locking. See you soon! 🔒'; }
+      if (/windows xp|luna|bliss/.test(l)) { Retro.set('xp'); return 'Welcome back to 2001. 🌄'; }
+      if (/windows 95|classic theme|retro/.test(l)) { Retro.set('95'); return 'It\'s 1995. The Microsoft Sound plays. 🖥️'; }
+      if (/modern theme|windows 11 theme|normal theme/.test(l)) { Retro.set(''); return 'Back to the future. 🪟'; }
+      if (/\b(e-?mail|outlook|inbox)\b/.test(l)) { Apps.launch('outlook'); return 'Opening Outlook. You have mail. Probably from Clippy. 📧'; }
+      if (/calendar|event|schedule|meeting|remind/.test(l)) { Apps.launch('calendar'); return 'Here\'s your Calendar. Double-click a day to add an event. 📅'; }
+      if (/record|voice memo|microphone/.test(l)) { Apps.launch('recorder'); return 'Voice Recorder is up. Testing, 1-2-3. 🎙️'; }
       if (/update|patch/.test(l)) { Apps.launch('settings', { section: 'update' }); return 'Opening Windows Update. It\'s only a little bit fake. 🔄'; }
       if (/^run\b|run dialog|win\s*\+\s*r/.test(l)) { setTimeout(() => RunDialog.open(), 300); return 'Win+R, at your service. ▶️'; }
       if (/task view|virtual desktop|new desktop/.test(l)) { TaskView.open(); return 'Here\'s Task View. Win+Tab gets you here too. 🗔'; }
@@ -1242,6 +1283,8 @@ Apps.register({
           <div class="wall-grid" style="margin-bottom:18px">
             ${Wallpapers.ids.map(id => `<div class="wall-opt ${wp === id ? 'sel' : ''}" data-w="${id}" title="${Wallpapers.names[id]}" style="background-image:url('${Wallpapers.uri(id)}')"></div>`).join('')}
           </div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Visual style</div><div class="set-s">Windows 11, or a trip down memory lane</div></div>
+            <select class="fluent-input" data-k="retro"><option value="" ${!Settings.get('retro') ? 'selected' : ''}>Windows 11</option><option value="xp" ${Settings.get('retro') === 'xp' ? 'selected' : ''}>Windows XP (Luna)</option><option value="95" ${Settings.get('retro') === '95' ? 'selected' : ''}>Windows 95 (Classic)</option></select></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Dark mode</div><div class="set-s">Switch between light and dark theme</div></div><div class="switch ${Settings.get('theme') === 'dark' ? 'on' : ''}" data-k="theme"></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Accent color</div><div class="set-s">Used across buttons and highlights</div></div></div>
           <div class="accent-row">${accents.map(a => `<div class="acc-opt ${Settings.get('accent') === a ? 'sel' : ''}" data-a="${a}" style="background:${a}"></div>`).join('')}</div>
@@ -1251,7 +1294,8 @@ Apps.register({
         content.querySelectorAll('.wall-opt').forEach(w => w.addEventListener('click', () => { Settings.set('wallpaper', w.dataset.w); renderContent(); }));
         content.querySelectorAll('.acc-opt').forEach(a => a.addEventListener('click', () => { Settings.set('accent', a.dataset.a); renderContent(); }));
         content.querySelector('.switch').addEventListener('click', () => { Settings.set('theme', Settings.get('theme') === 'dark' ? 'light' : 'dark'); renderContent(); });
-        content.querySelector('select').addEventListener('change', e => Settings.set('taskbarAlign', e.target.value));
+        content.querySelector('select[data-k=taskbarAlign]').addEventListener('change', e => Settings.set('taskbarAlign', e.target.value));
+        content.querySelector('select[data-k=retro]').addEventListener('change', e => { Retro.set(e.target.value); renderContent(); });
       } else if (sel === 'system') {
         let used = 0;
         try { used = (localStorage.getItem('win11.fs') || '').length + (localStorage.getItem('win11.settings') || '').length; } catch (e) {}

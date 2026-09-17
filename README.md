@@ -46,6 +46,8 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Neko** — a desktop cat from the Store that chases your mouse and naps when you stop. Pet her.
 - **Accounts & Accessibility** — rename yourself, pick an emoji avatar, turn on Narrator (reads toasts and Clippy aloud) or rainbow mouse trails.
 - **Matrix** screensaver, minimize/restore animations, and Task Manager knows about all of it.
+- **Retro themes** — Settings → Personalization → Visual style: **Windows XP** (Luna, Bliss, the green start button) or **Windows 95** (Classic teal, bevels, MS Sans Serif). Each has its own startup chime.
+- **Live wallpaper** — "Aurora (animated)" in the wallpaper picker.
 - **Run dialog** — Win+R. `calc`, `cmd`, `mspaint`, a path, a URL, `winver`, `regedit` (no).
 - **Windows Update** — Settings → Windows Update. Check, download, "Restart now", the blue "Working on updates" screen, a reboot, and a Tips & What's New app afterwards.
 - **Start search** — inline math (`12*12`), Settings pages, commands (lock, sleep, task view…), and a web-search fallback.
@@ -55,7 +57,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 
 | App | What actually works |
 |---|---|
-| File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app |
+| File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out |
 | Word | Rich-text editing (bold/italic/lists/headings/colors), word count, saves `.doc` files to Documents |
 | Excel | Real formula engine — `=SUM(A1:A5)`, `AVG`, `MIN`, `MAX`, `COUNT`, arithmetic, cell references, circular-ref detection; saves `.xls` |
 | PowerPoint | Slide editor with thumbnails + full-screen Present mode (arrow keys); saves `.ppt` |
@@ -64,6 +66,9 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | Spotify | Full clone UI — albums, search, library, queue, working play/pause/next/seek/volume. Every track is procedurally composed and actually plays |
 | Slack / Discord | Channels, persistent message history, and chatty bot coworkers/gamers who type back |
 | Microsoft Edge | Browser-in-a-browser with tabs, bookmarks bar, history, search, and an honest "this site blocks embedding" banner. Deploy the optional proxy in [`proxy/`](proxy/README.md) (a 5-minute Cloudflare Worker) and Edge routes through it automatically so most sites load |
+| Outlook | Folders, search, compose, drafts, junk, reply. Mail the bots in the address book (Clippy, Neko, IT Helpdesk, The Boss) and they write back |
+| Calendar | Month view, events with colors and 10-minute reminders, agenda in the clock flyout |
+| Camera / Voice Recorder | Real webcam with filters; real microphone with a live meter. Photos land in Camera Roll, recordings in Music › Recordings |
 | Notepad, Paint, Calculator, Terminal, Settings | The classics: Paint has shapes + flood fill and saves PNGs; Terminal has a real command set over the virtual FS (`help`); Settings does themes, wallpapers, accent colors, storage and Reset PC |
 
 **Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper, Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. All uninstallable from the Store or Settings → Apps.
