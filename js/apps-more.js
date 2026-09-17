@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const renderCal = Shell.renderCalendar.bind(Shell);
   Shell.renderCalendar = function () { renderCal(); Notifications.render(); };
   const tb = document.getElementById('tb-weather');
-  if (tb) tb.textContent = Widgets.ICONS[new Date().getDay()] + ' ' + Widgets.TEMPS[new Date().getDay()] + '°F';
+  if (tb && !(typeof Weather !== 'undefined' && Weather.snapshot())) tb.textContent = Widgets.ICONS[new Date().getDay()] + ' ' + Widgets.TEMPS[new Date().getDay()] + '°F';
 });
 
 /* ---------- Widgets panel ---------- */
@@ -247,13 +247,15 @@ const Widgets = {
     const todo = Store.get('win11.todo', []).filter(t => !t.done).slice(0, 4);
     const pics = FS.list(HOME + '/Pictures').filter(f => f.node.type === 'file' && /\.(png|jpe?g|svg|gif|webp)$/i.test(f.name));
     const pic = pics.length ? pics[Math.floor(rnd() * pics.length)] : null;
-    const temps = this.TEMPS, icons = this.ICONS;
+    const temps = this.TEMPS.slice(), icons = this.ICONS.slice();
+    const wx = typeof Weather !== 'undefined' && Weather.snapshot();
+    if (wx) { const d0 = new Date().getDay(); wx.days.slice(0, 7).forEach((x, i) => { temps[(d0 + i) % 7] = Math.round(x.hi); icons[(d0 + i) % 7] = Weather.desc(x.code)[0]; }); temps[d0] = Math.round(wx.now.temp); icons[d0] = Weather.desc(wx.now.code)[0]; }
     const day = new Date().getDay();
     const now = new Date();
     this.el.innerHTML = `
       <div class="wg-head"><div class="wg-time">${now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div><div class="wg-date">${now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</div></div>
       <div class="wg-grid">
-        <div class="wg-card" data-launch="${Apps.isInstalled('weather') ? 'weather' : 'store'}"><div class="wg-title">Weather • Webville</div><div class="wg-weather"><span class="wg-big">${icons[day]}</span><div><div class="wg-temp">${temps[day]}°F</div><div class="wg-sub">Feels like ${temps[day] - 2}° • Mostly fine</div></div></div>
+        <div class="wg-card" data-launch="${Apps.isInstalled('weather') ? 'weather' : 'store'}"><div class="wg-title">Weather • ${wx ? Utils.esc(wx.loc) : 'Webville'}</div><div class="wg-weather"><span class="wg-big">${icons[day]}</span><div><div class="wg-temp">${temps[day]}°${wx ? Weather.unit() : 'F'}</div><div class="wg-sub">${wx ? Weather.desc(wx.now.code)[1] + ' • Wind ' + Math.round(wx.now.wind) + ' mph' : 'Feels like ' + (temps[day] - 2) + '° • Mostly fine'}</div></div></div>
           <div class="wg-days">${[1, 2, 3, 4].map(i => `<div><div>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(day + i) % 7]}</div><div>${icons[(day + i) % 7]}</div><div>${temps[(day + i) % 7]}°</div></div>`).join('')}</div></div>
         <div class="wg-card" data-launch="${Apps.isInstalled('todo') ? 'todo' : 'store'}"><div class="wg-title">To Do</div>${todo.length ? todo.map(t => `<div class="wg-todo">☐ ${Utils.esc(t.text)}</div>`).join('') : '<div class="wg-sub">Nothing pending. Install Microsoft To Do to add tasks.</div>'}</div>
         <div class="wg-card wg-news"><div class="wg-title">Top stories • MSN-ish</div>${news.map(n => `<div class="wg-headline">${Utils.esc(n)}</div>`).join('')}</div>

@@ -46,6 +46,10 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Neko** — a desktop cat from the Store that chases your mouse and naps when you stop. Pet her.
 - **Accounts & Accessibility** — rename yourself, pick an emoji avatar, turn on Narrator (reads toasts and Clippy aloud) or rainbow mouse trails.
 - **Matrix** screensaver, minimize/restore animations, and Task Manager knows about all of it.
+- **First-run setup** — a Windows-style OOBE on first boot: name, avatar, visual style, wallpaper, extras. Skippable.
+- **Copilot voice** — 🎤 in Copilot uses the Web Speech API (Chrome/Edge). Narrator reads replies aloud if enabled.
+- **Action center** — Wi-Fi and Bluetooth panels with (fake) networks and devices, airplane mode, real online/offline detection, and the real battery level in the tray.
+- **Clipboard history** — Win+V. Everything you copy inside the OS, click to paste.
 - **Retro themes** — Settings → Personalization → Visual style: **Windows XP** (Luna, Bliss, the green start button) or **Windows 95** (Classic teal, bevels, MS Sans Serif). Each has its own startup chime.
 - **Live wallpaper** — "Aurora (animated)" in the wallpaper picker.
 - **Run dialog** — Win+R. `calc`, `cmd`, `mspaint`, a path, a URL, `winver`, `regedit` (no).
@@ -57,6 +61,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 
 | App | What actually works |
 |---|---|
+| MSN Weather | **Real** 7-day forecast from Open-Meteo (no key) for any city or your GPS location, °F/°C. Feeds the taskbar, the Widgets panel and Copilot. Offline it falls back to a deterministic Webville forecast |
 | File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out |
 | Word | Rich-text editing (bold/italic/lists/headings/colors), word count, saves `.doc` files to Documents |
 | Excel | Real formula engine — `=SUM(A1:A5)`, `AVG`, `MIN`, `MAX`, `COUNT`, arithmetic, cell references, circular-ref detection; saves `.xls` |
@@ -71,7 +76,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | Camera / Voice Recorder | Real webcam with filters; real microphone with a live meter. Photos land in Camera Roll, recordings in Music › Recordings |
 | Notepad, Paint, Calculator, Terminal, Settings | The classics: Paint has shapes + flood fill and saves PNGs; Terminal has a real command set over the virtual FS (`help`); Settings does themes, wallpapers, accent colors, storage and Reset PC |
 
-**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper, Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. All uninstallable from the Store or Settings → Apps.
+**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper, Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Chess** (full rules, alpha-beta engine, three difficulties), **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. All uninstallable from the Store or Settings → Apps.
 
 ## Performance notes
 

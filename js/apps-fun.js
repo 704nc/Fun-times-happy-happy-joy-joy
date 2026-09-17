@@ -128,6 +128,7 @@ Apps.register({
               <div class="ach-bar"><div style="width:${Math.round(100 * score / total)}%"></div></div>
             </div>
           </div>
+          ${(() => { const h = Store.get('win11.hiscores', {}); const names = { breakout: 'Breakout', pong: 'Pong', flappy: 'Flappy Window', tetris: 'Tetris', invaders: 'Space Invaders', solitaire: 'Solitaire', chess: 'Chess' }; const snake = +(localStorage.getItem('win11.snake.hi') || 0); if (snake) h.snake = snake; const keys = Object.keys(h).filter(k => h[k]); return keys.length ? `<div class="ach-hs"><div class="ach-hs-t">High scores</div>${keys.map(k => `<div class="ach-hs-row"><span>${names[k] || (k === 'snake' ? 'Snake' : k)}</span><b>${h[k]}</b></div>`).join('')}</div>` : ''; })()}
           <div class="ach-grid">${Achievements.list.map(a => {
             const on = !!got[a.id];
             const hidden = a.secret && !on;

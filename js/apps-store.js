@@ -310,31 +310,34 @@ Apps.register({
 /* Weather */
 Apps.register({
   id: 'weather', name: 'MSN Weather', icon: '🌤️', color: 'linear-gradient(135deg,#4facfe,#00c6fb)',
-  category: 'Utilities', store: true, width: 620, height: 520,
-  desc: 'A 7-day forecast for Webville. Deterministically generated from the date — meteorology, but honest about it.', rating: 4.1, size: '3.2 MB',
+  category: 'Utilities', store: true, width: 640, height: 560, singleton: true,
+  desc: 'A real 7-day forecast from Open-Meteo for any city on Earth, or your location. Falls back to a lovingly fabricated Webville forecast when offline.', rating: 4.6, size: '3.2 MB',
   mount(win) {
-    const kinds = [['☀️', 'Sunny'], ['🌤️', 'Mostly sunny'], ['⛅', 'Partly cloudy'], ['🌥️', 'Cloudy'], ['🌧️', 'Rain showers'], ['⛈️', 'Thunderstorms'], ['🌫️', 'Foggy']];
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const today = new Date();
-    const rnd = Utils.rng(today.getFullYear() * 400 + today.getMonth() * 31 + today.getDate());
-    const week = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today); d.setDate(d.getDate() + i);
-      const k = kinds[Math.floor(rnd() * kinds.length)];
-      const hi = Math.round(62 + rnd() * 28), lo = hi - Math.round(8 + rnd() * 10);
-      return { day: i === 0 ? 'Today' : days[d.getDay()], ico: k[0], desc: k[1], hi, lo };
+    win.body.innerHTML = `<div class="weather-root"><div class="w-bar"><input class="w-search" placeholder="Search city…" spellcheck="false"><button class="w-loc" title="Use my location">📍</button><button class="w-unit" title="Toggle °F / °C">°${Weather.unit()}</button><button class="w-refresh" title="Refresh">⟳</button></div><div class="w-results"></div><div class="w-body"><div class="placeholder-pane" style="color:#fff"><div class="ph-ico">🌤️</div>Loading forecast…</div></div></div>`;
+    const $ = s => win.body.querySelector(s);
+    function draw(d) {
+      if (!win.body.isConnected) return;
+      const now = Weather.desc(d.now.code);
+      $('.w-body').innerHTML = `
+        <h1>📍 ${Utils.esc(d.loc)}</h1>
+        <div class="weather-now"><div class="w-ico">${now[0]}</div><div><div class="w-temp">${Weather.fmt(d.now.temp)}${Weather.unit()}</div><div>${now[1]}${d.now.feels !== undefined ? ' • Feels like ' + Weather.fmt(d.now.feels) : ''} • Wind ${Math.round(d.now.wind)} mph • Humidity ${Math.round(d.now.humidity)}%</div></div></div>
+        <div class="weather-days">${d.days.map((x, i) => { const k = Weather.desc(x.code); return `<div class="weather-day"><div>${i === 0 ? 'Today' : x.date.toLocaleDateString([], { weekday: 'short' })}</div><div class="wd-ico">${k[0]}</div><div><b>${Weather.fmt(x.hi)}</b> / ${Weather.fmt(x.lo)}</div><div style="font-size:11px;opacity:.85">${k[1]}</div></div>`; }).join('')}</div>
+        <p style="margin-top:22px;font-size:12px;opacity:.75">${d.fake ? 'Offline or blocked — showing the deterministic Webville forecast. Real data returns when the network does.' : 'Live data from Open-Meteo.com • updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p>`;
+    }
+    const load = force => Weather.fetch(force).then(draw);
+    let searchT;
+    $('.w-search').addEventListener('input', e => {
+      clearTimeout(searchT);
+      const q = e.target.value.trim();
+      if (q.length < 2) { $('.w-results').innerHTML = ''; return; }
+      searchT = setTimeout(() => Weather.search(q).then(list => { $('.w-results').innerHTML = list.map((l, i) => `<div class="w-result" data-i="${i}">${Utils.esc(l.name)}</div>`).join('') || '<div class="w-result">No matches</div>'; $('.w-results')._list = list; }).catch(() => { $('.w-results').innerHTML = '<div class="w-result">Search unavailable offline</div>'; }), 350);
     });
-    win.body.innerHTML = `
-      <div class="weather-root">
-        <h1>📍 Webville, Internet</h1>
-        <div class="weather-now">
-          <div class="w-ico">${week[0].ico}</div>
-          <div><div class="w-temp">${week[0].hi}°F</div><div>${week[0].desc} • Low ${week[0].lo}°</div></div>
-        </div>
-        <div class="weather-days">
-          ${week.map(w => `<div class="weather-day"><div>${w.day}</div><div class="wd-ico">${w.ico}</div><div><b>${w.hi}°</b> / ${w.lo}°</div><div style="font-size:11px;opacity:.85">${w.desc}</div></div>`).join('')}
-        </div>
-        <p style="margin-top:22px;font-size:12px;opacity:.75">Forecast generated locally — 100% accurate for Webville, results may vary elsewhere.</p>
-      </div>`;
+    $('.w-results').addEventListener('click', e => { const r = e.target.closest('[data-i]'); if (!r) return; const l = $('.w-results')._list[+r.dataset.i]; $('.w-results').innerHTML = ''; $('.w-search').value = ''; Settings.set('weatherLoc', l); load(true); });
+    $('.w-loc').addEventListener('click', () => Weather.useMyLocation().then(() => load(true)).catch(() => Shell.toast('MSN Weather', 'Couldn\'t get your location (permission denied or unavailable).', '📍')));
+    $('.w-unit').addEventListener('click', () => { Settings.set('weatherUnit', Weather.unit() === 'F' ? 'C' : 'F'); $('.w-unit').textContent = '°' + Weather.unit(); load(true); });
+    $('.w-refresh').addEventListener('click', () => load(true));
+    Bus.on('weather:changed', d => { if (win.body.isConnected) draw(d); });
+    load(false);
   }
 });
 

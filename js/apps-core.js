@@ -1150,7 +1150,7 @@ Apps.register({
         <div class="cop-msgs">
           <div class="cop-msg bot">Hi, I'm Copilot ✦ — your (extremely local) assistant. I can open apps ("open excel"), do math ("512*3+7"), tell a joke, switch dark mode, change the wallpaper, or tell you the time. Try me!</div>
         </div>
-        <div class="cop-input"><input placeholder="Ask me anything…" spellcheck="false"><button title="Send">➤</button></div>
+        <div class="cop-input"><input placeholder="Ask me anything…" spellcheck="false"><button class="cop-mic" title="Talk to Copilot">🎤</button><button class="cop-send" title="Send">➤</button></div>
       </div>`;
     const msgs = win.body.querySelector('.cop-msgs');
     const input = win.body.querySelector('input');
@@ -1216,10 +1216,15 @@ Apps.register({
       if (/widget/.test(l)) { Widgets.toggle(); return 'Widgets, coming right up. 📰'; }
       if (/task manager|processes|not responding/.test(l)) { Apps.launch('taskmgr'); return 'Here\'s Task Manager. Please don\'t end me. 📊'; }
       if (/shortcut|hotkey|keyboard/.test(l)) return 'Hotkeys: Alt+Tab switches windows, Ctrl+Shift+Esc opens Task Manager, Ctrl+Esc opens Start, Win+D shows the desktop, Win+E opens Explorer. And there\'s a certain code from 1986…';
-      if (/weather/.test(l)) {
-        if (Apps.isInstalled('weather')) { Apps.launch('weather'); return 'Here\'s the forecast for Webville!'; }
-        return 'Install MSN Weather from the Microsoft Store and I\'ll pull up the forecast for you.';
+      if (/weather|forecast|temperature|rain/.test(l)) {
+        const d = Weather.snapshot();
+        if (Apps.isInstalled('weather')) Apps.launch('weather');
+        if (d) return `${d.loc}: ${Weather.desc(d.now.code)[1].toLowerCase()}, ${Weather.fmt(d.now.temp)}${Weather.unit()} right now. ${Weather.desc(d.days[1].code)[0]} tomorrow, high ${Weather.fmt(d.days[1].hi)}.` + (Apps.isInstalled('weather') ? '' : ' Install MSN Weather from the Store for the full week.');
+        Weather.fetch().then(() => {});
+        return 'Fetching the forecast… ask me again in a second. 🌦️';
       }
+      if (/chess/.test(l)) { if (Apps.isInstalled('chess')) { Apps.launch('chess'); return 'Chess it is. I\'ll pretend not to know the engine\'s weaknesses. ♞'; } return 'Chess is in the Microsoft Store. Install it and I\'ll set up the board.'; }
+      if (/clipboard|copied/.test(l)) { setTimeout(() => ClipHistory.toggle(), 300); return 'Win+V opens clipboard history. Here it is. 📋'; }
       if (/who are you|what are you/.test(l)) return 'I\'m Copilot — well, a homage to it. I live entirely in this browser tab and I\'m powered by a handful of if-statements doing their absolute best.';
       if (/help|what can you/.test(l)) return 'I can: open apps ("open paint"), calculate ("(84/2)*3"), tell jokes, toggle dark/light mode, change the wallpaper, show the weather, tell you the time or date, summon Clippy, start a party, show your achievements, lock the PC, or crash it (on request).';
       if (/thank/.test(l)) return 'Anytime! 💜';
@@ -1237,10 +1242,24 @@ Apps.register({
       input.value = '';
       add(q, 'me');
       const thinking = add('…', 'bot');
-      setTimeout(() => { thinking.textContent = respond(q); msgs.scrollTop = msgs.scrollHeight; }, 450 + Math.random() * 500);
+      setTimeout(() => { thinking.textContent = respond(q); msgs.scrollTop = msgs.scrollHeight; if (Settings.get('narrator') && typeof Narrator !== 'undefined') Narrator.say(thinking.textContent); }, 450 + Math.random() * 500);
     }
     input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
-    win.body.querySelector('.cop-input button').addEventListener('click', send);
+    win.body.querySelector('.cop-send').addEventListener('click', send);
+    const mic = win.body.querySelector('.cop-mic');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let rec = null;
+    mic.addEventListener('click', () => {
+      if (!SR) { Shell.toast('Copilot', 'Voice input needs a browser with the Web Speech API (Chrome or Edge).', '🎤'); return; }
+      if (rec) { rec.stop(); return; }
+      rec = new SR(); rec.lang = navigator.language || 'en-US'; rec.interimResults = true;
+      mic.classList.add('on'); input.placeholder = 'Listening…';
+      rec.onresult = e => { const t = [...e.results].map(r => r[0].transcript).join(''); input.value = t; if (e.results[e.results.length - 1].isFinal) { Achievements.unlock('voice'); send(); } };
+      rec.onerror = e => { Shell.toast('Copilot', 'Voice input failed: ' + e.error, '🎤'); };
+      rec.onend = () => { rec = null; mic.classList.remove('on'); input.placeholder = 'Ask me anything…'; };
+      try { rec.start(); } catch (e) { rec = null; mic.classList.remove('on'); }
+    });
+    win.onClose(() => { if (rec) rec.stop(); });
     setTimeout(() => input.focus(), 150);
   }
 });
