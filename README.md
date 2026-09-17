@@ -95,6 +95,10 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 
 **Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper (three difficulties, timer, best times), Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Chess** (full rules, alpha-beta engine, three difficulties, or play a friend in another tab over Nearby Share), **Labyrinth 3D** (a Wolfenstein-style raycaster maze), **Dot Muncher** (four ghosts, power pellets), **Sudoku** (generated puzzles with unique solutions), **Asteroids** (vector rocks, hyperspace), **Wordl** (daily + practice, streaks, shareable grid), **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes (floating desktop notes, draggable, recolorable), MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. Search the catalog, read (fabricated) ratings & reviews, post your own. All uninstallable from the Store or Settings → Apps.
 
+## Tests
+
+Fifteen end-to-end suites in [`tests/`](tests/README.md) drive the real desktop in headless Chromium (every app, the games, Office, Explorer, Edge, two-tab Nearby Share, a phone-size sweep). `node tests/run.mjs` runs them locally; the **Tests** GitHub Actions workflow runs them on every push.
+
 ## Performance notes
 
 - Zero dependencies, ~200 KB of unminified source total; wallpapers and sample photos are inline SVG, so there are no image downloads.
