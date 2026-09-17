@@ -30,7 +30,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Xbox Achievements** — 20 achievements with gamerscore, unlock toasts and a chime. Two are secret. Reset PC wipes them, so be careful.
 - **Clippy** — Settings → Fun, or ask Copilot. Offers context-aware tips when you open Word, Excel, Terminal… Right-click him to make him leave.
 - **Screensavers** — Bubbles, Starfield, Mystify and a bouncing logo. Kicks in after 5 idle minutes by default (configurable in Settings → Fun); any input dismisses it.
-- **Task Manager** — Ctrl+Shift+Esc. Live CPU graph, per-window "usage", End task actually closes windows. Ending Windows Explorer or Desktop Window Manager does what you'd expect.
+- **Task Manager** — Ctrl+Shift+Esc. Processes with a live CPU graph and End task, a Performance tab (JS heap, storage, uptime, network), and a Startup tab for Clippy, Neko and friends.
 - **Keyboard shortcuts** — Alt+Tab (or Alt+`) window switcher, Ctrl+Esc for Start, Win+D show desktop, Win+E Explorer, Win+I Settings.
 - **Power menu** — the Start power button now offers Lock (real lock screen), Sleep (screensaver), Restart and Shut down ("It's now safe to turn off your computer").
 - **Konami code** — ↑↑↓↓←→←→BA on the desktop. Confetti, rainbow accent, chiptune fanfare.
@@ -48,7 +48,8 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Matrix** screensaver, minimize/restore animations, and Task Manager knows about all of it.
 - **Desktop icons** drag anywhere and stay put; right-click → Auto arrange to reset. **Wallpaper slideshow** in Personalization. **Win + /** shows a keyboard-shortcut cheat sheet.
 - **Deep links** — `?app=terminal` (or any app id, plus `&path=`) opens it after sign-in; the PWA manifest ships shortcuts for Terminal, Store, Xbox and Camera.
-- **Snipping Tool** — Win+Shift+S captures the whole desktop (DOM → SVG → JPEG, no libraries) into Pictures › Screenshots. Chrome/Edge.
+- **Snipping Tool** — Win+Shift+S captures the whole desktop (DOM → SVG → JPEG, no libraries) into Pictures › Screenshots; the app adds active-window capture and delays. Chrome/Edge.
+- **Now playing** — a 🎵 tray icon with a media flyout (track, progress, prev/play/next) whenever Spotify or Media Player is playing.
 - **Accessibility** — text size 100–150%, high-contrast mode, Narrator, mouse trails, emoji panel.
 - **Lock screen** shows the weather, your next event, unread mail and notification count.
 - **First-run setup** — a Windows-style OOBE on first boot: name, avatar, visual style, wallpaper, extras. Skippable.
@@ -67,9 +68,9 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | App | What actually works |
 |---|---|
 | MSN Weather | **Real** 7-day forecast from Open-Meteo (no key) for any city or your GPS location, °F/°C. Feeds the taskbar, the Widgets panel and Copilot. Offline it falls back to a deterministic Webville forecast |
-| File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out. List/grid views, sort, in-folder search, Properties dialog |
+| File Explorer | Browse, create, rename, delete files/folders in a persistent virtual C: drive; double-click opens files in the right app. Upload or drag real files in, download any file back out. List/grid views, sort, in-folder search, Properties, Copy/Cut/Paste (Ctrl+C/X/V), Open with… |
 | Word | Rich-text editing (bold/italic/lists/headings/colors), word count, saves `.doc` files to Documents |
-| Excel | Real formula engine — `=SUM(A1:A5)`, `AVG`, `MIN`, `MAX`, `COUNT`, arithmetic, cell references, circular-ref detection; saves `.xls` |
+| Excel | Real formula engine — `=SUM(A1:A5)`, `AVG`, `MIN`, `MAX`, `COUNT`, arithmetic, cell references, circular-ref detection; bar/line/pie charts from a range; saves `.xls` |
 | PowerPoint | Slide editor with thumbnails + full-screen Present mode (arrow keys); saves `.ppt` |
 | Photos | Gallery of the virtual Pictures folder, viewer with next/prev, rotate, filters, save-a-copy, slideshow, delete, import your own images, set-as-wallpaper |
 | Media Player | Plays the built-in music library (synthesized live via WebAudio), plus any audio/video file you open from disk; seek bar + visualizer |
@@ -83,7 +84,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | Clock | World clocks, stopwatch with laps, timers and alarms that keep running (and ring) with the window closed |
 | Paint, Calculator, Terminal, Settings | The classics: Paint has shapes + flood fill and saves PNGs; Terminal has a real command set over the virtual FS (`help`), history (↑/↓) and Tab completion; Settings does themes, wallpapers, accent colors, storage and Reset PC |
 
-**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper (three difficulties, timer, best times), Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Chess** (full rules, alpha-beta engine, three difficulties), **Labyrinth 3D** (a Wolfenstein-style raycaster maze), **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. Search the catalog, read (fabricated) ratings & reviews, post your own. All uninstallable from the Store or Settings → Apps.
+**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper (three difficulties, timer, best times), Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Chess** (full rules, alpha-beta engine, three difficulties), **Labyrinth 3D** (a Wolfenstein-style raycaster maze), **Dot Muncher** (four ghosts, power pellets), **Sudoku** (generated puzzles with unique solutions), **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. Search the catalog, read (fabricated) ratings & reviews, post your own. All uninstallable from the Store or Settings → Apps.
 
 ## Performance notes
 

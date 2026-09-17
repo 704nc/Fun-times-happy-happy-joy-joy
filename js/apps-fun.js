@@ -492,7 +492,10 @@ Apps.register({
     const hash = s => { let h = 7; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
     win.body.innerHTML = `
       <div class="tm-root">
+        <div class="tm-tabs"><button data-t="proc" class="sel">Processes</button><button data-t="perf">Performance</button><button data-t="startup">Startup</button></div>
         <div class="tm-perf"><canvas class="tm-graph" width="600" height="60"></canvas><div class="tm-perf-lbl">CPU <b class="tm-cpu">0%</b> • Memory <b class="tm-mem">0 MB</b> • Processes <b class="tm-n">0</b></div></div>
+        <div class="tm-panel tm-panel-perf" style="display:none"></div>
+        <div class="tm-panel tm-panel-startup" style="display:none"></div>
         <div class="tm-table">
           <div class="tm-row tm-head"><span>Name</span><span>Status</span><span>CPU</span><span>Memory</span></div>
           <div class="tm-body"></div>
@@ -566,8 +569,34 @@ Apps.register({
       Achievements.unlock('taskmgr');
       render();
     });
-    render();
-    timer = setInterval(render, 1000);
+    let tab = 'proc';
+    const STARTUP = [['clippy', '📎', 'Office Assistant', 'High'], ['neko', '🐈', 'Neko', 'Medium'], ['cursorTrail', '🌈', 'Mouse trails', 'Low'], ['narrator', '🗣️', 'Narrator', 'Medium'], ['sounds', '🔔', 'System sounds', 'Low']];
+    function renderPanels() {
+      win.body.querySelectorAll('.tm-tabs button').forEach(b => b.classList.toggle('sel', b.dataset.t === tab));
+      win.body.querySelector('.tm-table').style.display = tab === 'proc' ? '' : 'none';
+      win.body.querySelector('.tm-foot').style.display = tab === 'proc' ? '' : 'none';
+      win.body.querySelector('.tm-panel-perf').style.display = tab === 'perf' ? '' : 'none';
+      win.body.querySelector('.tm-panel-startup').style.display = tab === 'startup' ? '' : 'none';
+      if (tab === 'perf') {
+        const mem = performance.memory, up = performance.now() / 1000, c = navigator.connection || {};
+        let ls = 0; try { for (let i = 0; i < localStorage.length; i++) ls += (localStorage.getItem(localStorage.key(i)) || '').length * 2; } catch (e) {}
+        win.body.querySelector('.tm-panel-perf').innerHTML = `
+          <div class="tm-stat"><span>JS heap</span><b>${mem ? Utils.fmtBytes(mem.usedJSHeapSize) + ' of ' + Utils.fmtBytes(mem.jsHeapSizeLimit) : 'not exposed by this browser'}</b></div>
+          <div class="tm-stat"><span>Browser storage</span><b>${Utils.fmtBytes(ls)} of ~5 MB</b></div>
+          <div class="tm-stat"><span>Uptime</span><b>${Math.floor(up / 3600)}:${String(Math.floor(up / 60) % 60).padStart(2, '0')}:${String(Math.floor(up) % 60).padStart(2, '0')}</b></div>
+          <div class="tm-stat"><span>Logical processors</span><b>${navigator.hardwareConcurrency || '?'}</b></div>
+          <div class="tm-stat"><span>Network</span><b>${navigator.onLine ? (c.effectiveType || 'online') + (c.downlink ? ' • ~' + c.downlink + ' Mbps' : '') : 'offline'}</b></div>
+          <div class="tm-stat"><span>Display</span><b>${innerWidth} × ${innerHeight} @ ${devicePixelRatio}x</b></div>
+          <div class="tm-stat"><span>Windows open</span><b>${WM.allDesks().length} on ${Desktops.count} desktop${Desktops.count > 1 ? 's' : ''}</b></div>
+          <div class="tm-stat"><span>Handles</span><b>${document.querySelectorAll('*').length} DOM nodes</b></div>`;
+      } else if (tab === 'startup') {
+        win.body.querySelector('.tm-panel-startup').innerHTML = `<div class="tm-row tm-head"><span>Name</span><span>Status</span><span>Impact</span><span></span></div>` + STARTUP.map(([k, i, n, imp]) => { const on = k === 'sounds' ? Settings.get(k) !== false : !!Settings.get(k); return `<div class="tm-row"><span class="tm-name"><span class="tm-sysico">${i}</span><span>${n}</span></span><span>${on ? 'Enabled' : 'Disabled'}</span><span>${imp}</span><span><button class="fluent-btn subtle" data-st="${k}">${on ? 'Disable' : 'Enable'}</button></span></div>`; }).join('');
+      }
+    }
+    win.body.querySelector('.tm-tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tab = b.dataset.t; renderPanels(); } });
+    win.body.querySelector('.tm-panel-startup').addEventListener('click', e => { const b = e.target.closest('[data-st]'); if (!b) return; const k = b.dataset.st; if (k === 'neko' && !Apps.isInstalled('neko')) { Shell.toast('Task Manager', 'Neko isn\'t installed. Get her from the Store.', '🐈'); return; } Settings.set(k, k === 'sounds' ? Settings.get(k) === false : !Settings.get(k)); renderPanels(); });
+    render(); renderPanels();
+    timer = setInterval(() => { render(); if (tab === 'perf') renderPanels(); }, 1000);
     win.onClose(() => clearInterval(timer));
   }
 });

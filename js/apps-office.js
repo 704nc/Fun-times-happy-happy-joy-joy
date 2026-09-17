@@ -87,17 +87,19 @@ Apps.register({
     const COLS = 12, ROWS = 40;
     const colName = i => String.fromCharCode(65 + i);
     let path = args.path || null;
-    let cells = {}; // "A1" -> raw string
+    let cells = {}, chart = null; // "A1" -> raw string; chart = { range, type }
     if (path) {
       const n = FS.get(path);
-      if (n) { try { cells = JSON.parse(n.content).cells || {}; } catch (e) {} }
+      if (n) { try { const j = JSON.parse(n.content); cells = j.cells || {}; chart = j.chart || null; } catch (e) {} }
     }
     win.body.innerHTML = `
       <div class="office-ribbon" style="background:#107c41">
         <span class="o-name">Excel</span>
         <input class="doc-name" placeholder="Book1" spellcheck="false">
         <button class="o-save">💾 Save</button>
+        <button class="o-chart">📊 Chart</button>
       </div>
+      <div class="xl-chart" style="display:none"><div class="xl-chart-bar"><span class="xl-chart-title"></span><select class="xl-chart-type"><option value="bar">Bar</option><option value="line">Line</option><option value="pie">Pie</option></select><button class="xl-chart-x" title="Remove chart">✕</button></div><canvas width="640" height="220"></canvas></div>
       <div class="excel-formula-bar">
         <div class="cell-ref">A1</div>
         <input class="fx-input" placeholder="Enter a value or formula, e.g. =SUM(A1:A5)" spellcheck="false">
@@ -168,7 +170,53 @@ Apps.register({
         td.textContent = v;
         td.classList.toggle('num', typeof v === 'number');
       });
+      drawChart();
     }
+    function drawChart() {
+      const box = $('.xl-chart');
+      if (!chart) { box.style.display = 'none'; return; }
+      box.style.display = '';
+      const refs = rangeRefs(chart.range);
+      const m = chart.range.match(/^([A-Z])(\d+):([A-Z])(\d+)$/); if (!m) return;
+      const c1 = m[1].charCodeAt(0) - 65, r1 = +m[2], r2 = +m[4];
+      const labels = [], values = [];
+      for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++) {
+        const a = cellValue(colName(c1) + r), b = cellValue(colName(c1 + 1) + r);
+        if (typeof b === 'number') { labels.push(String(a)); values.push(b); }
+      }
+      $('.xl-chart-title').textContent = chart.range + (values.length ? '' : ' — no numbers found in the second column');
+      $('.xl-chart-type').value = chart.type;
+      const cv = box.querySelector('canvas'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+      ctx.clearRect(0, 0, W, H);
+      if (!values.length) return;
+      const accent = ['#107c41', '#0078d4', '#ca5010', '#8764b8', '#e3008c', '#038387', '#c42b1c', '#ffb900'];
+      ctx.font = '12px Segoe UI, system-ui, sans-serif'; ctx.fillStyle = '#333';
+      if (chart.type === 'pie') {
+        const tot = values.reduce((s, v) => s + Math.max(0, v), 0) || 1; let a0 = -Math.PI / 2;
+        values.forEach((v, i) => { const a1 = a0 + Math.max(0, v) / tot * Math.PI * 2; ctx.fillStyle = accent[i % accent.length]; ctx.beginPath(); ctx.moveTo(150, H / 2); ctx.arc(150, H / 2, 90, a0, a1); ctx.closePath(); ctx.fill(); a0 = a1; ctx.fillRect(270, 20 + i * 18, 12, 12); ctx.fillStyle = '#333'; ctx.fillText(labels[i] + ' — ' + v + ' (' + Math.round(v / tot * 100) + '%)', 290, 31 + i * 18); });
+        return;
+      }
+      const pad = 40, min = Math.min(0, ...values), max = Math.max(...values, 1), span = max - min || 1, n = values.length;
+      ctx.strokeStyle = '#ccc'; ctx.beginPath(); ctx.moveTo(pad, 10); ctx.lineTo(pad, H - pad); ctx.lineTo(W - 10, H - pad); ctx.stroke();
+      const y = v => H - pad - (v - min) / span * (H - pad - 20);
+      const zero = y(0); ctx.strokeStyle = '#999'; ctx.beginPath(); ctx.moveTo(pad, zero); ctx.lineTo(W - 10, zero); ctx.stroke();
+      ctx.fillStyle = '#555'; ctx.textAlign = 'right'; ctx.fillText(String(max), pad - 4, 16); ctx.fillText(String(min), pad - 4, H - pad + 4);
+      const bw = (W - pad - 20) / n;
+      if (chart.type === 'bar') values.forEach((v, i) => { ctx.fillStyle = accent[i % accent.length]; const top = Math.min(y(v), zero); ctx.fillRect(pad + i * bw + bw * .15, top, bw * .7, Math.abs(y(v) - zero)); });
+      else { ctx.strokeStyle = '#107c41'; ctx.lineWidth = 2; ctx.beginPath(); values.forEach((v, i) => { const x = pad + i * bw + bw / 2; i ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); ctx.fillStyle = '#107c41'; values.forEach((v, i) => { ctx.beginPath(); ctx.arc(pad + i * bw + bw / 2, y(v), 3.5, 0, 7); ctx.fill(); }); ctx.lineWidth = 1; }
+      ctx.fillStyle = '#333'; ctx.textAlign = 'center'; labels.forEach((l, i) => ctx.fillText(l.slice(0, 10), pad + i * bw + bw / 2, H - pad + 14));
+      ctx.textAlign = 'left';
+    }
+    $('.o-chart').addEventListener('click', () => {
+      const guess = (() => { const m = sel.match(/^([A-Z])(\d+)$/); let r = +m[2]; while (r > 1 && cells[m[1] + (r - 1)] !== undefined) r--; let r2 = r; while (cells[m[1] + (r2 + 1)] !== undefined) r2++; return m[1] + r + ':' + colName(m[1].charCodeAt(0) - 65 + 1) + r2; })();
+      const range = prompt('Chart range (labels in the first column, numbers in the second):', chart ? chart.range : guess);
+      if (!range) return;
+      const norm = range.toUpperCase().replace(/\s+/g, '');
+      if (!/^[A-L]\d+:[A-L]\d+$/.test(norm)) { Shell.toast('Excel', 'Use a range like A1:B6.', '📗'); return; }
+      chart = { range: norm, type: chart ? chart.type : 'bar' }; drawChart();
+    });
+    $('.xl-chart-type').addEventListener('change', e => { if (chart) { chart.type = e.target.value; drawChart(); } });
+    $('.xl-chart-x').addEventListener('click', () => { chart = null; drawChart(); });
     let sel = 'A1';
     function selectCell(ref, focusFormula) {
       sel = ref;
@@ -222,7 +270,7 @@ Apps.register({
     function save() {
       const name = nameInput.value.trim() || 'Book1';
       path = 'C:/Users/Seefood/Documents/' + name + '.xls';
-      FS.write(path, JSON.stringify({ cells }), 'application/vnd.ms-excel');
+      FS.write(path, JSON.stringify({ cells, chart }), 'application/vnd.ms-excel');
       win.setTitle(name + '.xls - Excel');
       Shell.toast('Excel', 'Saved to Documents/' + name + '.xls', '📗');
     }

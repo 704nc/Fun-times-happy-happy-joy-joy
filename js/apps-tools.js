@@ -76,16 +76,19 @@ document.addEventListener('DOMContentLoaded', () => Access.apply());
 /* ---------- Snipping Tool: DOM → SVG foreignObject → canvas → JPEG in Pictures/Screenshots ---------- */
 const Snip = {
   busy: false,
-  async capture() {
+  async capture(opts) {
     if (this.busy) return;
     this.busy = true;
+    opts = opts || {};
     try {
-      const W = innerWidth, H = innerHeight;
+      const W = opts.win ? opts.win.el.offsetWidth : innerWidth, H = opts.win ? opts.win.el.offsetHeight : innerHeight;
       const css = await fetch('css/win11.css').then(r => r.text()).catch(() => '');
       const root = document.documentElement.cloneNode(true);
+      if (opts.win) { const wc = root.querySelector('#windows-layer'); const src = [...document.querySelectorAll('.win')].indexOf(opts.win.el); const mine = wc.querySelectorAll('.win')[src]; [...wc.children].forEach(ch => { if (ch !== mine) ch.remove(); }); mine.style.left = '0'; mine.style.top = '0'; mine.style.width = W + 'px'; mine.style.height = H + 'px'; ['#desktop-icons', '#taskbar', '#notif-layer', '.clippy', '.neko', '#live-wallpaper', '#start-menu', '.shell-flyout'].forEach(s => root.querySelectorAll(s).forEach(x => x.remove())); root.querySelector('#desktop').style.backgroundImage = 'none'; root.querySelector('#desktop').style.background = 'transparent'; root.querySelector('body').style.background = 'transparent'; }
       // canvases don't clone their pixels: swap each for an <img> of its current bitmap
       const live = [...document.querySelectorAll('canvas')], cloned = [...root.querySelectorAll('canvas')];
-      cloned.forEach((c, i) => { try { const img = document.createElement('img'); img.setAttribute('src', live[i].toDataURL('image/png')); img.setAttribute('style', c.getAttribute('style') || ''); img.setAttribute('class', c.className); img.style.width = live[i].clientWidth + 'px'; img.style.height = live[i].clientHeight + 'px'; c.replaceWith(img); } catch (e) { c.remove(); } });
+      if (!opts.win) cloned.forEach((c, i) => { try { const img = document.createElement('img'); img.setAttribute('src', live[i].toDataURL('image/png')); img.setAttribute('style', c.getAttribute('style') || ''); img.setAttribute('class', c.className); img.style.width = live[i].clientWidth + 'px'; img.style.height = live[i].clientHeight + 'px'; c.replaceWith(img); } catch (e) { c.remove(); } });
+      if (opts.win) { const liveC = [...opts.win.el.querySelectorAll('canvas')]; [...root.querySelectorAll('.win canvas')].forEach((c, i) => { try { const img = document.createElement('img'); img.setAttribute('src', liveC[i].toDataURL('image/png')); img.setAttribute('class', c.className); img.style.width = liveC[i].clientWidth + 'px'; img.style.height = liveC[i].clientHeight + 'px'; c.replaceWith(img); } catch (e) { c.remove(); } }); }
       root.querySelectorAll('script, iframe, video, #boot, .snip-flash').forEach(el => el.remove());
       root.querySelectorAll('input, textarea').forEach((el, i) => { const src = [...document.querySelectorAll('input, textarea')][i]; if (src && src.type !== 'file') { if (src.tagName === 'TEXTAREA') el.textContent = src.value; else el.setAttribute('value', src.value); } });
       root.querySelectorAll('select').forEach((el, i) => { const src = [...document.querySelectorAll('select')][i]; if (src) [...el.options].forEach((o, j) => j === src.selectedIndex ? o.setAttribute('selected', '') : o.removeAttribute('selected')); });
@@ -98,15 +101,17 @@ const Snip = {
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
       await loaded;
       const c = document.createElement('canvas'); c.width = W; c.height = H;
-      const ctx = c.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); ctx.drawImage(img, 0, 0, W, H);
+      const ctx = c.getContext('2d'); if (!opts.win) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); } ctx.drawImage(img, 0, 0, W, H);
       let data;
-      try { data = c.toDataURL('image/jpeg', 0.85); } catch (e) { throw new Error('canvas tainted'); }
+      try { data = opts.win ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.85); } catch (e) { throw new Error('canvas tainted'); }
+      if (opts.win && data.length > 1.4 * 1048576) data = c.toDataURL('image/jpeg', 0.85);
       if (data.length > 1.4 * 1048576) data = c.toDataURL('image/jpeg', 0.6);
       const dir = HOME + '/Pictures/Screenshots';
       if (!FS.get(dir)) FS.mkdir(dir);
       const now = new Date();
-      const name = FS.uniqueName(dir, 'Screenshot ' + now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 8).replace(/:/g, '-'), '.jpg');
-      FS.write(dir + '/' + name, data, 'image/jpeg');
+      const ext = data.startsWith('data:image/png') ? '.png' : '.jpg';
+      const name = FS.uniqueName(dir, (opts.win ? opts.win.getTitle().replace(/[\\/:*?"<>|]/g, '') + ' ' : 'Screenshot ') + now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 8).replace(/:/g, '-'), ext);
+      FS.write(dir + '/' + name, data, ext === '.png' ? 'image/png' : 'image/jpeg');
       const flash = Utils.el('div', 'snip-flash'); document.body.appendChild(flash); setTimeout(() => flash.remove(), 400);
       try { Synth.note(96, 0.05, 'square'); } catch (e) {}
       Achievements.unlock('snip');

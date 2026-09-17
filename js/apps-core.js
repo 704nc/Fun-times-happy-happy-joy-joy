@@ -42,7 +42,7 @@ Apps.register({
         </div>
         <div class="fx-main">
           <div class="fx-side"></div>
-          <div class="fx-files"></div>
+          <div class="fx-files" tabindex="0"></div>
         </div>
         <div class="fx-status"></div>
       </div>`;
@@ -155,8 +155,23 @@ Apps.register({
       if (href.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(href), 5000);
     }
     win._fxDownload = download;
+    const OPEN_WITH = [['notepad', 'Notepad'], ['word', 'Word'], ['paint', 'Paint'], ['photos', 'Photos'], ['mediaplayer', 'Media Player'], ['edge', 'Microsoft Edge']];
+    function pasteHere() {
+      const cb = FS._clip; if (!cb) return;
+      const ok = cb.cut ? FS.move(cb.path, cwd) : FS.copy(cb.path, cwd);
+      if (ok) { Achievements.unlock('organizer'); if (cb.cut) FS._clip = null; } else Shell.toast('File Explorer', 'Can\'t paste that here.', '⚠️');
+    }
+    win.body.addEventListener('keydown', e => {
+      if (!(e.ctrlKey || e.metaKey) || e.target.matches('input')) return;
+      if (e.key === 'c' && selected) FS._clip = { path: cwd + '/' + selected, cut: false };
+      else if (e.key === 'x' && selected) FS._clip = { path: cwd + '/' + selected, cut: true };
+      else if (e.key === 'v') pasteHere();
+      else return;
+      e.preventDefault();
+    });
     files.addEventListener('click', e => {
       const it = e.target.closest('.fx-item');
+      files.focus();
       files.querySelectorAll('.fx-item').forEach(x => x.classList.remove('sel'));
       selected = it ? it.dataset.n : null;
       if (it) {
@@ -187,6 +202,8 @@ Apps.register({
         }
         if (FS.get(p) && FS.get(p).type === 'file') items.push({ label: 'Download to this computer', icon: '⬇️', fn: () => download(p) });
         items.push({ label: 'Properties', icon: 'ℹ️', fn: () => properties(it.dataset.n) });
+        if (FS.get(p) && FS.get(p).type === 'file') items.splice(1, 0, { label: 'Open with…', icon: '🧩', fn: () => setTimeout(() => Shell.contextMenu(e.clientX + 20, e.clientY + 10, OPEN_WITH.filter(([id]) => Apps.isInstalled(id)).map(([id, n]) => ({ label: n, icon: Apps.get(id).letter ? '' : Apps.get(id).icon, fn: () => Apps.launch(id, id === 'edge' ? { url: FS.get(p).content } : { path: p }) }))), 0) });
+        items.splice(items.findIndex(x => x.label === 'Rename'), 0, { label: 'Copy', icon: '📋', fn: () => { FS._clip = { path: p, cut: false }; } }, { label: 'Cut', icon: '✂️', fn: () => { FS._clip = { path: p, cut: true }; } });
         items.push(
           { label: 'Rename', icon: '✏️', fn: () => {
             const n = prompt('Rename to:', it.dataset.n);
@@ -206,6 +223,7 @@ Apps.register({
           { label: 'New folder', icon: '📁', fn: () => FS.mkdir(cwd + '/' + FS.uniqueName(cwd, 'New folder', '')) },
           { label: 'New text file', icon: '📄', fn: () => FS.write(cwd + '/' + FS.uniqueName(cwd, 'New Text Document', '.txt'), '', 'text/plain') },
           { label: 'Upload files…', icon: '⬆️', fn: () => $('.fx-upload input').click() },
+          ...(FS._clip ? [{ sep: true }, { label: 'Paste ' + FS._clip.path.split('/').pop(), icon: '📋', fn: pasteHere }] : []),
           { label: 'Refresh', icon: '🔄', fn: render }
         ]);
       }
@@ -1361,7 +1379,7 @@ Apps.register({
       if (/chess/.test(l)) { if (Apps.isInstalled('chess')) { Apps.launch('chess'); return 'Chess it is. I\'ll pretend not to know the engine\'s weaknesses. ♞'; } return 'Chess is in the Microsoft Store. Install it and I\'ll set up the board.'; }
       if (/clipboard|copied/.test(l)) { setTimeout(() => ClipHistory.toggle(), 300); return 'Win+V opens clipboard history. Here it is. 📋'; }
       if (/who are you|what are you/.test(l)) return 'I\'m Copilot — well, a homage to it. I live entirely in this browser tab and I\'m powered by a handful of if-statements doing their absolute best.';
-      if (/help|what can you/.test(l)) return 'I can: open apps ("open paint"), calculate ("(84/2)*3"), tell jokes, toggle dark/light mode, change the wallpaper, show the weather, tell you the time or date, summon Clippy, start a party, show your achievements, lock the PC, or crash it (on request).';
+      if (/help|what can you/.test(l)) return 'I can: open apps and files ("open paint", "open Welcome.txt"), calculate, tell jokes, set timers and reminders, flip coins and roll dice, take a screenshot, report the real weather, switch themes ("Windows XP"), summon Clippy or Neko, start a party, open Task View, show achievements, lock the PC, run Windows Update, or crash it on request. Try the 🎤 to talk.';
       if (/thank/.test(l)) return 'Anytime! 💜';
       if (/^(hi|hello|hey|yo)\b/.test(l)) return 'Hey there! What can I do for you?';
       const fallback = [
@@ -1457,7 +1475,9 @@ Apps.register({
         try { used = (localStorage.getItem('win11.fs') || '').length + (localStorage.getItem('win11.settings') || '').length; } catch (e) {}
         content.innerHTML = `
           <h1>System</h1>
-          <div class="set-card"><div class="set-info"><div class="set-t">Storage</div><div class="set-s">${Utils.fmtBytes(used * 2)} used of ~5 MB browser storage</div></div></div>
+          <div class="set-card" style="flex-direction:column;align-items:stretch"><div class="set-info"><div class="set-t">Storage</div><div class="set-s">${Utils.fmtBytes(used * 2)} used of ~5 MB browser storage</div></div>
+            <div class="store-progress" style="margin:8px 0"><div style="width:${Math.min(100, used * 2 / 5242880 * 100)}%"></div></div>
+            ${(() => { const rows = []; const folderSize = n => { let s = 0; const walk = x => { for (const ch of Object.values(x.children || {})) ch.type === 'folder' ? walk(ch) : s += String(ch.content || '').length; }; walk(n); return s; }; FS.list(HOME).filter(f => f.node.type === 'folder').forEach(f => rows.push([f.name, folderSize(f.node) * 2])); let other = 0; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k !== 'win11.fs') other += (localStorage.getItem(k) || '').length * 2; } } catch (e) {} rows.push(['Settings, apps & saves', other]); const max = Math.max(1, ...rows.map(r => r[1])); return rows.sort((a, b) => b[1] - a[1]).map(([n, v]) => `<div class="stg-row"><span>${Utils.esc(n)}</span><div><div style="width:${v / max * 100}%"></div></div><b>${Utils.fmtBytes(v)}</b></div>`).join(''); })()}</div>
           <div class="set-card"><div class="set-info"><div class="set-t">Display</div><div class="set-s">${window.innerWidth} × ${window.innerHeight}, ${window.devicePixelRatio}x scaling</div></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">System sounds</div><div class="set-s">Notification chime, timer bells, UI blips</div></div><div class="switch ${Settings.get('sounds') !== false ? 'on' : ''}" id="snd-sw"></div><button class="fluent-btn subtle" id="snd-test">Test</button></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Edge web proxy</div><div class="set-s">Optional. A tiny Cloudflare Worker that lets Edge show sites that normally refuse to be embedded — see <code>proxy/README.md</code> in the repo. Leave empty to load pages directly.</div></div><input class="fluent-input" id="edge-proxy" style="width:260px" placeholder="https://….workers.dev" value="${Utils.esc(Settings.get('edgeProxy') || '')}"></div>
