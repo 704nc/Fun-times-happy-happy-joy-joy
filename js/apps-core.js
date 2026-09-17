@@ -211,7 +211,7 @@ Apps.register({
       }
     });
     const onFs = () => { if (FS.get(cwd)) render(); else nav(HOME); };
-    Bus.on('fs:changed', onFs);
+    win.on('fs:changed', onFs);
     render();
   }
 });
@@ -1089,7 +1089,7 @@ Apps.register({
       }
     }, 120);
     const onPlayer = () => renderList();
-    Bus.on('player:change', onPlayer);
+    win.on('player:change', onPlayer);
     win.onClose(() => { clearInterval(uiTimer); stopMedia(); });
     renderList();
     if (args.path) win._mpOpenPath(args.path);
@@ -1260,7 +1260,7 @@ Apps.register({
     $('.eb-proxy').addEventListener('click', () => { const t = tab(); t.direct = undefined; load(t); });
     $('.eb-setup').addEventListener('click', () => Apps.launch('settings', { section: 'system' }));
     $('.eb-x').addEventListener('click', () => { tab().dismissed = tab().url; banner.style.display = 'none'; });
-    Bus.on('settings:edgeProxy', () => { if (win.body.isConnected) { renderBm(); if (tab() && tab().url) { tab().direct = undefined; tab().dismissed = null; load(tab()); } } });
+    win.on('settings:edgeProxy', () => { if (win.body.isConnected) { renderBm(); if (tab() && tab().url) { tab().direct = undefined; tab().dismissed = null; load(tab()); } } });
     newTab(args && args.url);
   }
 });
@@ -1437,6 +1437,7 @@ Apps.register({
           <div class="wall-grid" style="margin-bottom:18px">
             ${Wallpapers.ids.map(id => `<div class="wall-opt ${wp === id ? 'sel' : ''}" data-w="${id}" title="${Wallpapers.names[id]}" style="background-image:url('${Wallpapers.uri(id)}')"></div>`).join('')}
           </div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Wallpaper slideshow</div><div class="set-s">Cycle through the built-in wallpapers</div></div><select class="fluent-input" data-k="wallpaperSlide">${[0, 1, 5, 15, 60].map(m => `<option value="${m}" ${+Settings.get('wallpaperSlide') === m ? 'selected' : ''}>${m ? 'Every ' + m + ' min' : 'Off'}</option>`).join('')}</select></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Visual style</div><div class="set-s">Windows 11, or a trip down memory lane</div></div>
             <select class="fluent-input" data-k="retro"><option value="" ${!Settings.get('retro') ? 'selected' : ''}>Windows 11</option><option value="xp" ${Settings.get('retro') === 'xp' ? 'selected' : ''}>Windows XP (Luna)</option><option value="95" ${Settings.get('retro') === '95' ? 'selected' : ''}>Windows 95 (Classic)</option></select></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Dark mode</div><div class="set-s">Switch between light and dark theme</div></div><div class="switch ${Settings.get('theme') === 'dark' ? 'on' : ''}" data-k="theme"></div></div>
@@ -1450,6 +1451,7 @@ Apps.register({
         content.querySelector('.switch').addEventListener('click', () => { Settings.set('theme', Settings.get('theme') === 'dark' ? 'light' : 'dark'); renderContent(); });
         content.querySelector('select[data-k=taskbarAlign]').addEventListener('change', e => Settings.set('taskbarAlign', e.target.value));
         content.querySelector('select[data-k=retro]').addEventListener('change', e => { Retro.set(e.target.value); renderContent(); });
+        content.querySelector('select[data-k=wallpaperSlide]').addEventListener('change', e => Settings.set('wallpaperSlide', +e.target.value));
       } else if (sel === 'system') {
         let used = 0;
         try { used = (localStorage.getItem('win11.fs') || '').length + (localStorage.getItem('win11.settings') || '').length; } catch (e) {}

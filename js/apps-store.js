@@ -351,7 +351,7 @@ Apps.register({
     $('.w-loc').addEventListener('click', () => Weather.useMyLocation().then(() => load(true)).catch(() => Shell.toast('MSN Weather', 'Couldn\'t get your location (permission denied or unavailable).', '📍')));
     $('.w-unit').addEventListener('click', () => { Settings.set('weatherUnit', Weather.unit() === 'F' ? 'C' : 'F'); $('.w-unit').textContent = '°' + Weather.unit(); load(true); });
     $('.w-refresh').addEventListener('click', () => load(true));
-    Bus.on('weather:changed', d => { if (win.body.isConnected) draw(d); });
+    win.on('weather:changed', d => { if (win.body.isConnected) draw(d); });
     load(false);
   }
 });
@@ -413,7 +413,7 @@ Apps.register({
     }
     win.body.querySelector('.clk-tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tab = b.dataset.t; render(); } });
     const iv = setInterval(tick, 100);
-    Bus.on('timers:changed', () => { if (body.isConnected) tick(); });
+    win.on('timers:changed', () => { if (body.isConnected) tick(); });
     win.onClose(() => clearInterval(iv));
     render();
   }
@@ -511,8 +511,12 @@ Apps.register({
   id: 'store', name: 'Microsoft Store', icon: '🛍️', color: 'linear-gradient(135deg,#3dd5f3,#0f6cbd)',
   category: 'System', width: 940, height: 620, singleton: true,
   mount(win) {
-    let cat = 'home';
+    let cat = 'home', query = '';
     const downloading = {}; // id -> progress 0..100
+    const REVIEWERS = ['Ada L.', 'Grace H.', 'Linus T.', 'Margaret H.', 'Dennis R.', 'Clippy', 'Neko', 'A Very Real User', 'xX_Gamer_Xx', 'The Boss', 'IT Helpdesk', 'Seefood'];
+    const BLURBS = { 5: ['Exactly what it says on the tin. Five stars.', 'Installed in seconds, no account, no nonsense.', 'My productivity has never been more simulated.', 'Would install again. Did, actually, three times.', 'It just works. Suspicious, but happy.'], 4: ['Great, but I wish it synced to my other browser tab.', 'Solid. Lost a star because Clippy commented on it.', 'Very good. The cat sat on the keyboard mid-game though.', 'Does the thing. Needs dark mode for my dark mood.'], 3: ['It\'s fine. It\'s a browser tab. What did I expect.', 'Works as advertised, and I\'m not sure what I was advertised.'], 2: ['Crashed my PC. (I typed bsod in the terminal.)', 'Uninstalled because I had achievements to earn elsewhere.'], 1: ['Not a real app. Zero stars would be more honest. Still using it daily.'] };
+    const hash = s => { let h = 7; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
+    function reviewsFor(a) { const rnd = Utils.rng(hash(a.id)); const n = 4 + Math.floor(rnd() * 4); return Array.from({ length: n }, (_, i) => { const stars = Math.max(1, Math.min(5, Math.round((a.rating || 4) + (rnd() - .5) * 2.4))); const pool = BLURBS[stars] || BLURBS[4]; return { who: REVIEWERS[Math.floor(rnd() * REVIEWERS.length)], stars, text: pool[Math.floor(rnd() * pool.length)], when: Math.floor(rnd() * 200) + 1 }; }); }
     win.body.innerHTML = `
       <div class="store-root">
         <div class="store-side">
@@ -523,7 +527,7 @@ Apps.register({
           <button data-c="Creativity">🎨<span>Create</span></button>
           <button data-c="library">📚<span>Library</span></button>
         </div>
-        <div class="store-content"></div>
+        <div class="store-main"><div class="store-search"><input placeholder="Search apps, games, and more" spellcheck="false"></div><div class="store-content"></div></div>
       </div>`;
     const content = win.body.querySelector('.store-content');
     const storeApps = () => Apps.all().filter(a => a.store);
@@ -539,12 +543,16 @@ Apps.register({
         <div class="store-card" data-app="${a.id}">
           <div class="sc-head">${appTileHTML(a)}<div><div class="sc-name">${a.name}</div><div class="sc-meta">${a.category} • ${a.size || '1 MB'} • Free</div><div class="sc-rating">${'★'.repeat(Math.round(a.rating || 4))}${'☆'.repeat(5 - Math.round(a.rating || 4))} ${a.rating || 4}</div></div></div>
           <div class="sc-desc">${a.desc || ''}</div>
-          ${btn}`;
+          ${btn}<button class="sc-reviews" data-reviews="${a.id}">Ratings & reviews ›</button>
+        </div>`;
     }
     function render() {
       win.body.querySelectorAll('.store-side button').forEach(b => b.classList.toggle('sel', b.dataset.c === cat));
       let apps = storeApps(), head = '';
-      if (cat === 'home') {
+      if (query) {
+        apps = apps.filter(a => (a.name + ' ' + (a.desc || '') + ' ' + a.category).toLowerCase().includes(query));
+        head = `<h1 style="font-size:22px;margin-bottom:16px">Results for "${Utils.esc(query)}"</h1>` + (apps.length ? '' : '<p style="color:var(--text-2)">Nothing matched. Try "game", "music" or "cat".</p>');
+      } else if (cat === 'home') {
         head = `<div class="store-hero"><h1>Microsoft Store</h1><p>Free apps and games that install right into this browser tab — they show up in your Start menu, and they actually run. No account, no credit card, no 37&nbsp;GB updates.</p></div>`;
       } else if (cat === 'library') {
         apps = apps.filter(a => (Settings.get('installedApps') || []).includes(a.id));
@@ -557,12 +565,29 @@ Apps.register({
     }
     win.body.querySelector('.store-side').addEventListener('click', e => {
       const b = e.target.closest('button');
-      if (b) { cat = b.dataset.c; render(); }
+      if (b) { cat = b.dataset.c; query = ''; win.body.querySelector('.store-search input').value = ''; render(); }
     });
+    win.body.querySelector('.store-search input').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); render(); });
+    function showReviews(a) {
+      const revs = reviewsFor(a);
+      const avg = (revs.reduce((s, r) => s + r.stars, 0) / revs.length).toFixed(1);
+      const counts = [5, 4, 3, 2, 1].map(s => revs.filter(r => r.stars === s).length);
+      const dlg = Utils.el('div', 'store-dlg');
+      dlg.innerHTML = `<div class="store-dlg-card"><div class="sc-head">${appTileHTML(a)}<div><div class="sc-name">${a.name}</div><div class="sc-meta">${revs.length} ratings • ${avg} ★ average</div></div><button class="store-dlg-x">✕</button></div>
+        <div class="store-bars">${counts.map((c, i) => `<div class="store-bar"><span>${5 - i}★</span><div><div style="width:${c / revs.length * 100}%"></div></div><span>${c}</span></div>`).join('')}</div>
+        <div class="store-revs">${revs.map(r => `<div class="store-rev"><div class="store-rev-h"><b>${Utils.esc(r.who)}</b><span>${'★'.repeat(r.stars)}${'☆'.repeat(5 - r.stars)}</span><small>${r.when} day${r.when === 1 ? '' : 's'} ago</small></div><div>${Utils.esc(r.text)}</div></div>`).join('')}</div>
+        <div class="oc-btns"><input class="fluent-input store-rev-in" placeholder="Write a review (it will be ignored with great care)" style="flex:1"><button class="fluent-btn store-rev-add">Post</button></div></div>`;
+      win.body.querySelector('.store-root').appendChild(dlg);
+      dlg.querySelector('.store-dlg-x').addEventListener('click', () => dlg.remove());
+      dlg.addEventListener('click', e => { if (e.target === dlg) dlg.remove(); });
+      dlg.querySelector('.store-rev-add').addEventListener('click', () => { const t = dlg.querySelector('.store-rev-in').value.trim(); if (!t) return; dlg.querySelector('.store-revs').insertAdjacentHTML('afterbegin', `<div class="store-rev"><div class="store-rev-h"><b>${Utils.esc(Settings.get('userName') || 'You')}</b><span>★★★★★</span><small>just now</small></div><div>${Utils.esc(t)}</div></div>`); dlg.querySelector('.store-rev-in').value = ''; Shell.toast('Microsoft Store', 'Thanks for your review! It has been filed under "reviews".', '🛍️'); });
+    }
     content.addEventListener('click', e => {
       const inst = e.target.closest('[data-install]');
       const open = e.target.closest('[data-open]');
       const unin = e.target.closest('[data-uninstall]');
+      const rev = e.target.closest('[data-reviews]');
+      if (rev) { showReviews(Apps.get(rev.dataset.reviews)); return; }
       if (inst) {
         const id = inst.dataset.install;
         downloading[id] = 0;
@@ -586,7 +611,7 @@ Apps.register({
         render();
       }
     });
-    Bus.on('apps:changed', () => { if (win.body.isConnected) render(); });
+    win.on('apps:changed', () => { if (win.body.isConnected) render(); });
     render();
   }
 });

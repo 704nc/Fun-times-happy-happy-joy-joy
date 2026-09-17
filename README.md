@@ -46,6 +46,8 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Neko** — a desktop cat from the Store that chases your mouse and naps when you stop. Pet her.
 - **Accounts & Accessibility** — rename yourself, pick an emoji avatar, turn on Narrator (reads toasts and Clippy aloud) or rainbow mouse trails.
 - **Matrix** screensaver, minimize/restore animations, and Task Manager knows about all of it.
+- **Desktop icons** drag anywhere and stay put; right-click → Auto arrange to reset. **Wallpaper slideshow** in Personalization. **Win + /** shows a keyboard-shortcut cheat sheet.
+- **Deep links** — `?app=terminal` (or any app id, plus `&path=`) opens it after sign-in; the PWA manifest ships shortcuts for Terminal, Store, Xbox and Camera.
 - **Snipping Tool** — Win+Shift+S captures the whole desktop (DOM → SVG → JPEG, no libraries) into Pictures › Screenshots. Chrome/Edge.
 - **Accessibility** — text size 100–150%, high-contrast mode, Narrator, mouse trails, emoji panel.
 - **Lock screen** shows the weather, your next event, unread mail and notification count.
@@ -81,12 +83,12 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 | Clock | World clocks, stopwatch with laps, timers and alarms that keep running (and ring) with the window closed |
 | Paint, Calculator, Terminal, Settings | The classics: Paint has shapes + flood fill and saves PNGs; Terminal has a real command set over the virtual FS (`help`), history (↑/↓) and Tab completion; Settings does themes, wallpapers, accent colors, storage and Reset PC |
 
-**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper (three difficulties, timer, best times), Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Chess** (full rules, alpha-beta engine, three difficulties), **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. All uninstallable from the Store or Settings → Apps.
+**Microsoft Store — with apps you can actually download.** Installing shows a download progress bar, then the app appears in Start, on the desktop, and in your library (persisted). Catalog: Minesweeper (three difficulties, timer, best times), Snake, 2048, Tic-Tac-Toe (minimax AI — it won't lose), **Solitaire**, **Chess** (full rules, alpha-beta engine, three difficulties), **Labyrinth 3D** (a Wolfenstein-style raycaster maze), **Tetris** (hold, ghost, hard drop), **Space Invaders** (shields that crumble, a UFO), **Breakout** (infinite levels, armored bricks), **Pong** (vs. a beatable CPU, first to 7), **Flappy Window** (a tiny Windows logo, aggressively unfair), Sticky Notes, MSN Weather, Clock/stopwatch, Tiny Piano (playable, keyboard mapped), Microsoft To Do. Games keep high scores and feed the achievements system. Search the catalog, read (fabricated) ratings & reviews, post your own. All uninstallable from the Store or Settings → Apps.
 
 ## Performance notes
 
 - Zero dependencies, ~200 KB of unminified source total; wallpapers and sample photos are inline SVG, so there are no image downloads.
-- Windows are plain DOM nodes; only visible UI is rendered, timers are per-open-window and cleaned up on close.
+- Windows are plain DOM nodes; only visible UI is rendered, timers are per-open-window and cleaned up on close. Event-bus subscriptions made by an app are scoped to its window (`win.on`) and dropped when it closes.
 - Music is scheduled through a single shared WebAudio context with a lookahead scheduler — no audio files to fetch.
 
 Not affiliated with Microsoft — this is a loving fan recreation for fun.

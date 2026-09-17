@@ -226,7 +226,7 @@ Apps.register({
     $('.cal-month').addEventListener('click', e => { const c = e.target.closest('.cm-cell[data-d]'); if (c) { selDay = c.dataset.d; render(); } });
     $('.cal-month').addEventListener('dblclick', e => { const c = e.target.closest('.cm-cell[data-d]'); if (c) addDialog(c.dataset.d); });
     $('.cal-day-list').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { CalendarStore.remove(+b.closest('.cal-ev').dataset.id); render(); } });
-    Bus.on('events:changed', () => { if (win.body.isConnected) render(); });
+    win.on('events:changed', () => { if (win.body.isConnected) render(); });
     render();
   }
 });
@@ -331,7 +331,7 @@ Apps.register({
       else { FS.recycle(DIR + '/' + n); list(); }
     });
     win.onClose(() => { stop(); if (stream) stream.getTracks().forEach(t => t.stop()); cancelAnimationFrame(raf); });
-    Bus.on('fs:changed', () => { if (win.body.isConnected) list(); });
+    win.on('fs:changed', () => { if (win.body.isConnected) list(); });
     list();
   }
 });

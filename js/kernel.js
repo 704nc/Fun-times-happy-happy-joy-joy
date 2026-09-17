@@ -34,6 +34,7 @@ const Utils = {
 const Bus = {
   _h: {},
   on(ev, fn) { (this._h[ev] = this._h[ev] || []).push(fn); },
+  off(ev, fn) { if (this._h[ev]) this._h[ev] = this._h[ev].filter(f => f !== fn); },
   emit(ev, data) { (this._h[ev] || []).forEach(fn => { try { fn(data); } catch (e) { console.error(e); } }); }
 };
 
@@ -61,7 +62,8 @@ const Settings = {
     retro: '',
     sounds: true,
     textScale: 1,
-    highContrast: false
+    highContrast: false,
+    wallpaperSlide: 0
   },
   load() {
     try { this._data = Object.assign({}, this._defaults, JSON.parse(localStorage.getItem(this._key) || '{}')); }

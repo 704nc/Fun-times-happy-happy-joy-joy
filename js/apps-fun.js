@@ -143,7 +143,7 @@ Apps.register({
         </div>`;
     }
     render();
-    Bus.on('achievements:changed', () => { if (win.body.isConnected) render(); });
+    win.on('achievements:changed', () => { if (win.body.isConnected) render(); });
   }
 });
 

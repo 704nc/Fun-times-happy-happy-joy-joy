@@ -1237,3 +1237,36 @@ html.hc .desk-icon .di-label { background: #000; text-shadow: none; }
 html.hc #desktop { background-image: none !important; background-color: #000; }
 html.hc .switch.on { background: #ffff00; } html.hc .switch.on::after { background: #000; }
 .mine-cell { width: var(--ms-cell, 30px); height: var(--ms-cell, 30px); font-size: calc(var(--ms-cell, 30px) * .47); }
+
+/* ============ Ultra: store search/reviews, labyrinth, icons, cheat sheet ============ */
+.store-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.store-main .store-content { flex: 1; min-height: 0; overflow: auto; }
+.store-search { padding: 12px 20px 0; }
+.store-search input { width: 100%; max-width: 420px; border: 1px solid var(--stroke); background: var(--card-solid); color: var(--text); border-radius: 18px; padding: 8px 16px; font-size: 13px; outline: none; }
+.sc-reviews { border: none; background: transparent; color: var(--accent); font-size: 12px; text-align: left; padding: 0; }
+.store-dlg { position: absolute; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 5; }
+.store-root { position: relative; }
+.store-dlg-card { width: 520px; max-width: 94%; max-height: 90%; overflow: auto; background: var(--surface-solid); border: 1px solid var(--stroke); border-radius: 10px; box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.store-dlg-card .sc-head { align-items: center; }
+.store-dlg-x { margin-left: auto; border: none; background: transparent; color: var(--text); font-size: 14px; }
+.store-bars { display: flex; flex-direction: column; gap: 3px; }
+.store-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.store-bar > div { flex: 1; height: 8px; background: var(--hover); border-radius: 4px; overflow: hidden; }
+.store-bar > div > div { height: 100%; background: #f7b500; }
+.store-revs { display: flex; flex-direction: column; gap: 8px; }
+.store-rev { background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 6px; padding: 10px 12px; font-size: 13px; }
+.store-rev-h { display: flex; gap: 10px; align-items: baseline; margin-bottom: 4px; }
+.store-rev-h span { color: #f7b500; font-size: 12px; }
+.store-rev-h small { color: var(--text-2); margin-left: auto; }
+.lb-touch { display: none; gap: 8px; justify-content: center; padding: 6px; }
+.lb-touch button { width: 56px; height: 44px; border: 1px solid var(--stroke); background: var(--card-solid); color: var(--text); border-radius: 8px; font-size: 18px; touch-action: none; }
+@media (pointer: coarse) { .lb-touch { display: flex; } }
+.desk-icon.dragging { opacity: .75; transform: scale(1.05); transition: none; }
+.cheat-sheet { position: fixed; inset: 0; z-index: 9460; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; animation: fade-in .12s; }
+.cheat-card { width: 560px; max-width: 94%; background: var(--surface-solid); border: 1px solid var(--stroke); border-radius: 10px; box-shadow: var(--shadow); padding: 18px 20px; }
+.cheat-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; margin-bottom: 12px; }
+.cheat-x { border: none; background: transparent; color: var(--text); font-size: 14px; }
+.cheat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; font-size: 13px; }
+.cheat-grid div { display: flex; align-items: center; gap: 10px; }
+.cheat-grid kbd { font-family: inherit; font-size: 12px; background: var(--card-solid); border: 1px solid var(--stroke); border-bottom-width: 2px; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+@media (max-width: 520px) { .cheat-grid { grid-template-columns: 1fr; } }

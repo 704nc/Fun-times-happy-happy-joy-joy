@@ -102,6 +102,8 @@ const WM = {
       setTitle(t) { el.querySelector('.wt-text').textContent = t; Bus.emit('wm:changed'); },
       getTitle() { return el.querySelector('.wt-text').textContent; },
       onClose(fn) { this._closeHooks.push(fn); },
+      // subscribe to the event bus for the lifetime of this window only
+      on(ev, fn) { Bus.on(ev, fn); this._closeHooks.push(() => Bus.off(ev, fn)); },
       focus() {
         win.z = ++WM._z;
         el.style.zIndex = win.z;

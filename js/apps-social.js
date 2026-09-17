@@ -331,7 +331,7 @@ Apps.register({
       if (document.activeElement !== $('.sp-seek')) $('.sp-seek').value = dur ? Math.round(pos / dur * 1000) : 0;
     }, 250);
     const onChange = () => { if (win.body.isConnected) { updateBar(); render(); } };
-    Bus.on('player:change', onChange);
+    win.on('player:change', onChange);
     win.onClose(() => clearInterval(uiTimer));
     render(); updateBar();
   }
