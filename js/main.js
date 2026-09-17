@@ -35,6 +35,7 @@
       Synth.chime(); // user gesture → audio allowed
       lockEl.classList.add('unlocking');
       setTimeout(() => lockEl.remove(), 500);
+      Bus.emit('shell:unlock');
       if (!localStorage.getItem('win11.welcomed')) {
         localStorage.setItem('win11.welcomed', '1');
         setTimeout(() => {

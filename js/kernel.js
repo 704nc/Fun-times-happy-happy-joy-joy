@@ -49,7 +49,10 @@ const Settings = {
     nightLight: false,
     installedApps: [],
     pinnedTaskbar: ['explorer', 'edge', 'store', 'word', 'excel', 'powerpoint', 'photos', 'spotify', 'slack', 'discord'],
-    userName: 'Seefood'
+    userName: 'Seefood',
+    clippy: false,
+    screensaver: 'bubbles',
+    screensaverMin: 5
   },
   load() {
     try { this._data = Object.assign({}, this._defaults, JSON.parse(localStorage.getItem(this._key) || '{}')); }

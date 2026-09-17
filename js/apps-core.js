@@ -315,7 +315,7 @@ Apps.register({
       if (!cmd) return;
       switch (cmd.toLowerCase()) {
         case 'help':
-          out('Available commands:\n  dir / ls        list directory\n  cd <dir>        change directory\n  type / cat <f>  print a file\n  echo <t> > <f>  write text to a file\n  mkdir <dir>     create directory\n  del / rm <f>    delete file or folder\n  tree            directory tree\n  start <app>     launch an app (e.g. start notepad)\n  apps            list app ids\n  cls / clear     clear screen\n  ver, whoami, date'); break;
+          out('Available commands:\n  dir / ls        list directory\n  cd <dir>        change directory\n  type / cat <f>  print a file\n  echo <t> > <f>  write text to a file\n  mkdir <dir>     create directory\n  del / rm <f>    delete file or folder\n  tree            directory tree\n  start <app>     launch an app (e.g. start notepad)\n  apps            list app ids\n  cls / clear     clear screen\n  ver, whoami, date\n\nFun stuff:\n  cowsay, fortune, neofetch, sl, clippy, screensaver [style],\n  party, bsod, achievements, hiscores, taskmgr, lock'); break;
         case 'dir': case 'ls': {
           const items = FS.list(resolve(arg));
           if (!FS.get(resolve(arg))) { print('The system cannot find the path specified.'); break; }
@@ -364,8 +364,11 @@ Apps.register({
         case 'whoami': print('desktop-web\\seefood'); break;
         case 'date': print(new Date().toString()); break;
         case 'exit': win.close(); break;
-        default: print(`'${cmd}' is not recognized as an internal or external command. Type "help".`);
+        default:
+          if (Object.prototype.hasOwnProperty.call(FunCmds, cmd.toLowerCase())) { FunCmds[cmd.toLowerCase()](print, arg, win); break; }
+          print(`'${cmd}' is not recognized as an internal or external command. Type "help".`);
       }
+      Bus.emit('terminal:cmd', cmd);
     }
     const l1 = Utils.el('div', 't-line'); l1.textContent = 'Windows 11 Web [Version 11.0.2026.728]';
     const l2 = Utils.el('div', 't-line'); l2.textContent = '(c) A browser near you. Type "help" to get started.';
@@ -1048,12 +1051,20 @@ Apps.register({
         Settings.set('wallpaper', next);
         return 'Switched the wallpaper to "' + Wallpapers.names[next] + '". 🖼️';
       }
+      if (/clippy|paperclip|office assistant/.test(l)) { Clippy.toggle(); return Settings.get('clippy') ? 'Summoning Clippy. Don\'t say I didn\'t warn you. 📎' : 'Clippy has been sent back to 1997. 👋'; }
+      if (/party|confetti|celebrate|happy happy|joy joy/.test(l)) { Party.start(); return 'Happy happy, joy joy! 🎉'; }
+      if (/crash|bsod|blue screen|kernel panic/.test(l)) { setTimeout(() => BSOD.show('COPILOT_WAS_ASKED_NICELY'), 800); return 'You asked for it. Saving your work… just kidding. 💙'; }
+      if (/achievement|trophy|gamerscore/.test(l)) { Apps.launch('xbox'); return 'You\'ve earned ' + Achievements.score() + ' G so far. Here\'s the full list. 🏆'; }
+      if (/screensaver|screen saver/.test(l)) { setTimeout(() => Screensaver.start(), 600); return 'Starting the screensaver. Move the mouse to come back. 🫧'; }
+      if (/lock (the )?(pc|screen|computer)|^lock$/.test(l)) { setTimeout(() => Lock.show(), 400); return 'Locking. See you soon! 🔒'; }
+      if (/task manager|processes|not responding/.test(l)) { Apps.launch('taskmgr'); return 'Here\'s Task Manager. Please don\'t end me. 📊'; }
+      if (/shortcut|hotkey|keyboard/.test(l)) return 'Hotkeys: Alt+Tab switches windows, Ctrl+Shift+Esc opens Task Manager, Ctrl+Esc opens Start, Win+D shows the desktop, Win+E opens Explorer. And there\'s a certain code from 1986…';
       if (/weather/.test(l)) {
         if (Apps.isInstalled('weather')) { Apps.launch('weather'); return 'Here\'s the forecast for Webville!'; }
         return 'Install MSN Weather from the Microsoft Store and I\'ll pull up the forecast for you.';
       }
       if (/who are you|what are you/.test(l)) return 'I\'m Copilot — well, a homage to it. I live entirely in this browser tab and I\'m powered by a handful of if-statements doing their absolute best.';
-      if (/help|what can you/.test(l)) return 'I can: open apps ("open paint"), calculate ("(84/2)*3"), tell jokes, toggle dark/light mode, change the wallpaper, show the weather, and tell you the time or date.';
+      if (/help|what can you/.test(l)) return 'I can: open apps ("open paint"), calculate ("(84/2)*3"), tell jokes, toggle dark/light mode, change the wallpaper, show the weather, tell you the time or date, summon Clippy, start a party, show your achievements, lock the PC, or crash it (on request).';
       if (/thank/.test(l)) return 'Anytime! 💜';
       if (/^(hi|hello|hey|yo)\b/.test(l)) return 'Hey there! What can I do for you?';
       const fallback = [
@@ -1086,6 +1097,7 @@ Apps.register({
       personalization: { icon: '🎨', name: 'Personalization' },
       system: { icon: '🖥️', name: 'System' },
       apps: { icon: '📦', name: 'Apps' },
+      fun: { icon: '🎉', name: 'Fun' },
       about: { icon: 'ℹ️', name: 'About' }
     };
     let sel = 'personalization';
@@ -1134,6 +1146,7 @@ Apps.register({
             localStorage.removeItem('win11.settings');
             localStorage.removeItem('win11.chat');
             localStorage.removeItem('win11.apps');
+            ['win11.achievements', 'win11.stats', 'win11.hiscores', 'win11.todo', 'win11.sticky', 'win11.snake.hi', 'win11.welcomed'].forEach(k => localStorage.removeItem(k));
             location.reload();
           }
         });
@@ -1147,6 +1160,23 @@ Apps.register({
           Shell.toast('Settings', Apps.get(b.dataset.un).name + ' was uninstalled.', '📦');
           renderContent();
         }));
+      } else if (sel === 'fun') {
+        const ss = Settings.get('screensaver'), mins = +Settings.get('screensaverMin') || 0;
+        content.innerHTML = `
+          <h1>Fun</h1>
+          <div class="set-card"><div class="set-info"><div class="set-t">Office Assistant (Clippy)</div><div class="set-s">A helpful paperclip that offers tips nobody asked for</div></div><div class="switch ${Settings.get('clippy') ? 'on' : ''}" data-k="clippy"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Screensaver</div><div class="set-s">Starts after a period of inactivity</div></div>
+            <select class="fluent-input" data-k="screensaver">${Object.entries(Screensaver.styles).map(([id, n]) => `<option value="${id}" ${ss === id ? 'selected' : ''}>${n}</option>`).join('')}</select>
+            <select class="fluent-input" data-k="screensaverMin">${[0, 1, 3, 5, 10, 30].map(m => `<option value="${m}" ${mins === m ? 'selected' : ''}>${m ? m + ' min' : 'Off'}</option>`).join('')}</select>
+            <button class="fluent-btn subtle" id="ss-preview">Preview</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Achievements</div><div class="set-s">${Achievements.score()} G of ${Achievements.total()} G earned</div></div><button class="fluent-btn" id="open-ach">View</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Party mode</div><div class="set-s">Confetti, rainbow accent, questionable music</div></div><button class="fluent-btn" id="party-btn">🎉 Party</button></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Keyboard shortcuts</div><div class="set-s">Alt+Tab switch windows • Ctrl+Shift+Esc Task Manager • Ctrl+Esc Start • Win+D desktop • Win+E Explorer • Win+I Settings</div></div></div>`;
+        content.querySelector('.switch').addEventListener('click', () => { Settings.set('clippy', !Settings.get('clippy')); renderContent(); });
+        content.querySelectorAll('select').forEach(s => s.addEventListener('change', e => Settings.set(e.target.dataset.k, e.target.dataset.k === 'screensaverMin' ? +e.target.value : e.target.value)));
+        content.querySelector('#ss-preview').addEventListener('click', () => setTimeout(() => Screensaver.start(), 250));
+        content.querySelector('#open-ach').addEventListener('click', () => Apps.launch('xbox'));
+        content.querySelector('#party-btn').addEventListener('click', () => Party.start());
       } else {
         content.innerHTML = `
           <h1>About</h1>

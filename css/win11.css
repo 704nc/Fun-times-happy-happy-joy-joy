@@ -39,7 +39,7 @@ button, input, select, textarea, label,
   touch-action: manipulation;
 }
 /* surfaces that own their touches entirely: drawing, playing, window drag/resize */
-.paint-canvas-wrap canvas, .piano-keys, .snake-board, .win-resizer, .win-titlebar { touch-action: none; }
+.paint-canvas-wrap canvas, .piano-keys, .snake-board, .arcade, .win-resizer, .win-titlebar { touch-action: none; }
 body {
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   font-size: 14px; color: var(--text);
@@ -685,3 +685,93 @@ html.dark .sticky-note-area { background: #665c1e; color: #fff; }
   #lockscreen .lock-time { font-size: 56px; }
   #lockscreen .lock-date { font-size: 16px; }
 }
+
+/* ============ Fun: achievements ============ */
+.ach-root { flex: 1; overflow: auto; padding: 18px; }
+.ach-head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; padding: 16px; border-radius: 10px; background: linear-gradient(135deg,#107c10,#0b5a0b); color: #fff; }
+.ach-avatar { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 600; }
+.ach-name { font-size: 18px; font-weight: 600; }
+.ach-sub { font-size: 13px; opacity: .9; margin: 2px 0 8px; }
+.ach-bar { height: 8px; border-radius: 4px; background: rgba(0,0,0,.3); overflow: hidden; }
+.ach-bar div { height: 100%; background: #9bf29b; transition: width .4s; }
+.ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.ach-card { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 8px; background: var(--card-solid); border: 1px solid var(--stroke); opacity: .55; filter: grayscale(.8); }
+.ach-card.on { opacity: 1; filter: none; border-color: rgba(16,124,16,.5); }
+.ach-ico { font-size: 28px; width: 40px; text-align: center; }
+.ach-t { font-size: 13px; font-weight: 600; }
+.ach-d { font-size: 12px; color: var(--text-2); }
+.ach-when { font-size: 11px; color: #2e9e2e; margin-top: 2px; }
+.ach-pts { font-size: 12px; font-weight: 700; color: #107c10; white-space: nowrap; }
+
+/* ============ Fun: Clippy ============ */
+.clippy { position: fixed; right: 24px; bottom: calc(var(--taskbar-h) + 14px); z-index: 8900; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; animation: clippy-in .5s cubic-bezier(.2,.9,.3,1.3); }
+.clippy.bye { transition: all .35s; opacity: 0; transform: translateY(40px) rotate(20deg); }
+@keyframes clippy-in { from { opacity: 0; transform: translateY(60px) } }
+.clippy-body { font-size: 58px; line-height: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); animation: clippy-bob 3s ease-in-out infinite; cursor: default; }
+.clippy-body.wiggle { animation: clippy-wiggle .6s ease-in-out; }
+@keyframes clippy-bob { 0%,100% { transform: translateY(0) rotate(-6deg) } 50% { transform: translateY(-6px) rotate(6deg) } }
+@keyframes clippy-wiggle { 0%,100% { transform: rotate(0) } 25% { transform: rotate(-18deg) scale(1.1) } 75% { transform: rotate(18deg) scale(1.1) } }
+.clippy-bubble { max-width: 260px; background: #fffbd6; color: #333; border: 1px solid #c9b96a; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0,0,0,.2); position: relative; }
+.clippy-bubble::after { content: ""; position: absolute; right: 22px; bottom: -8px; border: 8px solid transparent; border-top-color: #fffbd6; border-bottom: 0; }
+.clippy-bubble.pop { animation: bubble-pop .3s cubic-bezier(.2,.9,.3,1.3); }
+@keyframes bubble-pop { from { transform: scale(.6); opacity: 0 } }
+
+/* ============ Fun: screensaver, confetti, BSOD, shutdown, lock ============ */
+#screensaver { position: fixed; inset: 0; z-index: 9700; background: #000; cursor: none; animation: fade-in .6s; }
+#screensaver.out { transition: opacity .35s; opacity: 0; pointer-events: none; }
+@keyframes fade-in { from { opacity: 0 } }
+#confetti { position: fixed; inset: 0; z-index: 9550; pointer-events: none; }
+html.party #taskbar, html.party .win-titlebar, html.party #start-menu { animation: hue-spin 1.2s linear infinite; }
+@keyframes hue-spin { to { filter: hue-rotate(360deg) } }
+html.no-dwm .win { box-shadow: none !important; border-radius: 0 !important; backdrop-filter: none !important; }
+html.no-dwm #taskbar, html.no-dwm .shell-flyout { backdrop-filter: none !important; background: var(--surface-solid) !important; }
+html.no-dwm .win-titlebar { background: #000080 !important; color: #fff !important; }
+#bsod { position: fixed; inset: 0; z-index: 9995; background: #0078d7; color: #fff; font-family: "Segoe UI", system-ui, sans-serif; display: flex; align-items: center; justify-content: center; cursor: none; user-select: none; }
+.bsod-inner { max-width: 760px; padding: 40px; }
+.bsod-face { font-size: 120px; line-height: 1; margin-bottom: 30px; }
+.bsod-inner p { font-size: 20px; line-height: 1.4; margin-bottom: 18px; }
+.bsod-foot { display: flex; gap: 20px; align-items: flex-start; margin-top: 30px; }
+.bsod-foot p { font-size: 12px; margin: 0; }
+.bsod-qr { display: grid; grid-template-columns: repeat(11, 8px); gap: 1px; padding: 6px; background: #fff; flex: none; }
+.bsod-qr i { width: 8px; height: 8px; background: #fff; }
+.bsod-qr i.on { background: #000; }
+@media (max-width: 600px) { .bsod-face { font-size: 80px } .bsod-inner p { font-size: 15px } .bsod-foot { flex-direction: column } }
+#shutdown { position: fixed; inset: 0; z-index: 9990; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .6s; }
+#shutdown.in { opacity: 1; }
+#shutdown .boot-logo { gap: 24px; }
+.sd-text { font-size: 15px; }
+.sd-off { font-family: "Courier New", monospace; color: #ffb000; font-size: 22px; text-align: center; line-height: 1.6; }
+.sd-off small { font-size: 13px; opacity: .7; }
+#lockscreen.relock { animation: relock-in .45s cubic-bezier(.2,.8,.2,1); }
+@keyframes relock-in { from { transform: translateY(-100%); opacity: 0 } }
+
+/* ============ Fun: Alt+Tab switcher ============ */
+.alt-tab { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 9400; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 80vw; padding: 16px; border-radius: 12px; background: var(--surface); backdrop-filter: blur(30px); border: 1px solid var(--stroke); box-shadow: var(--shadow); animation: fade-in .12s; }
+.alt-tab-item { width: 150px; padding: 12px 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; border: 2px solid transparent; }
+.alt-tab-item .app-tile { width: 44px; height: 44px; font-size: 24px; }
+.alt-tab-item.sel { background: var(--hover); border-color: var(--accent); }
+.at-title { font-size: 12px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+
+/* ============ Fun: Task Manager ============ */
+.tm-root { display: flex; flex-direction: column; height: 100%; }
+.tm-perf { padding: 12px 14px 6px; border-bottom: 1px solid var(--stroke); }
+.tm-graph { width: 100%; height: 60px; display: block; background: var(--card-solid); border: 1px solid var(--stroke); border-radius: 4px; }
+.tm-perf-lbl { font-size: 12px; color: var(--text-2); margin-top: 6px; }
+.tm-table { flex: 1; overflow: auto; }
+.tm-body { min-height: 100%; }
+.tm-row { display: grid; grid-template-columns: 1fr 100px 70px 90px; align-items: center; padding: 6px 14px; font-size: 13px; border-bottom: 1px solid var(--stroke); }
+.tm-row.tm-head { position: sticky; top: 0; background: var(--win-bg); font-size: 12px; color: var(--text-2); z-index: 1; }
+.tm-row:not(.tm-head):hover { background: var(--hover); }
+.tm-row.sel { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.tm-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tm-name > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-name .app-tile.sm, .app-tile.sm { width: 22px; height: 22px; font-size: 13px; border-radius: 5px; }
+.tm-sysico { width: 22px; text-align: center; font-size: 15px; }
+.tm-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--stroke); }
+.tm-hint { font-size: 11px; color: var(--text-2); }
+.fluent-btn:disabled { opacity: .45; }
+@media (max-width: 520px) { .tm-row { grid-template-columns: 1fr 70px 60px; } .tm-row > span:nth-child(4) { display: none; } .tm-hint { display: none; } }
+
+/* ============ Fun: arcade ============ */
+.arcade { border-radius: 8px; border: 1px solid var(--stroke); box-shadow: 0 8px 24px rgba(0,0,0,.25); max-width: 100%; touch-action: none; outline: none; }
+.arcade:focus { box-shadow: 0 0 0 2px var(--accent), 0 8px 24px rgba(0,0,0,.25); }

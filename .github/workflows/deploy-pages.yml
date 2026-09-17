@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [claude/windows-11-browser-replica-dmmr0p, main, master]
+    branches: [claude/gracious-mendel-ezomni, claude/windows-11-browser-replica-dmmr0p, main, master]
   workflow_dispatch:
 
 permissions:

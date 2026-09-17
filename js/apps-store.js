@@ -67,7 +67,7 @@ Apps.register({
     function checkWin() {
       let unrevealed = 0;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!revealed[y][x]) unrevealed++;
-      if (unrevealed === MINES) { over = true; status.textContent = '🎉 You win!'; }
+      if (unrevealed === MINES) { over = true; status.textContent = '🎉 You win!'; Achievements.unlock('minesweeper'); }
     }
     gridEl.addEventListener('click', e => {
       const c = e.target.closest('.mine-cell');
@@ -131,6 +131,7 @@ Apps.register({
       if (snake.some(s => s.x === head.x && s.y === head.y)) {
         dead = true; clearInterval(timer);
         if (score > hi) { hi = score; localStorage.setItem('win11.snake.hi', hi); }
+        if (score >= 10) Achievements.unlock('snake');
         draw(); return;
       }
       snake.unshift(head);
@@ -211,7 +212,7 @@ Apps.register({
           for (let y = 0; y < 4; y++) g[y][x] = col[y];
         }
       }
-      if (JSON.stringify(g) !== before) { add(); draw(); }
+      if (JSON.stringify(g) !== before) { add(); draw(); if (g.flat().some(v => v >= 512)) Achievements.unlock('2048'); }
     }
     function draw() {
       board.innerHTML = g.flat().map(v =>
@@ -267,6 +268,7 @@ Apps.register({
     function end(w) {
       over = true;
       status.textContent = w === 'draw' ? '🤝 Draw!' : w === 'X' ? '🎉 You win!' : '🤖 Computer wins!';
+      if (w === 'draw') Achievements.unlock('tictactoe');
     }
     board.addEventListener('click', e => {
       const b = e.target.closest('.ttt-cell');

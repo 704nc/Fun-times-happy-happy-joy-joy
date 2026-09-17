@@ -320,8 +320,10 @@ const Shell = {
       document.getElementById('start-pinned-section').style.display = '';
     });
     document.getElementById('start-search-input').addEventListener('input', e => this.startSearch(e.target.value.trim()));
-    document.getElementById('power-btn').addEventListener('click', () => {
-      if (confirm('Shut down Windows 11 Web? (This just reloads the page.)')) location.reload();
+    document.getElementById('power-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const r = e.currentTarget.getBoundingClientRect();
+      Power.menu(r.left, r.top - 150);
     });
     // desktop icons — double-click opens; on touch screens a single tap opens
     const openIcon = ic => {
