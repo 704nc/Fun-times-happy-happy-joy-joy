@@ -303,7 +303,7 @@ const Screensaver = {
         ctx.fillRect(l.x, l.y + q + g, q, q); ctx.fillRect(l.x + q + g, l.y + q + g, q, q);
       }
     };
-    const fn = draw[style] || draw.bubbles;
+    const fn = draw[style] || (this.plugins && this.plugins[style] ? this.plugins[style](ctx, c) : draw.bubbles);
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W(), H());
     const loop = () => { fn(); this._raf = requestAnimationFrame(loop); };
     this._raf = requestAnimationFrame(loop);

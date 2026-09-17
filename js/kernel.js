@@ -52,7 +52,11 @@ const Settings = {
     userName: 'Seefood',
     clippy: false,
     screensaver: 'bubbles',
-    screensaverMin: 5
+    screensaverMin: 5,
+    neko: false,
+    avatar: '',
+    narrator: false,
+    cursorTrail: false
   },
   load() {
     try { this._data = Object.assign({}, this._defaults, JSON.parse(localStorage.getItem(this._key) || '{}')); }

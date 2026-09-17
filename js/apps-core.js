@@ -361,7 +361,7 @@ Apps.register({
         case 'apps': Apps.visible().forEach(a => print('  ' + a.id.padEnd(14) + a.name)); break;
         case 'cls': case 'clear': root.innerHTML = ''; break;
         case 'ver': print('Windows 11 Web [Version 11.0.2026.728]'); break;
-        case 'whoami': print('desktop-web\\seefood'); break;
+        case 'whoami': print('desktop-web\\' + String(Settings.get('userName') || 'seefood').toLowerCase().replace(/\s+/g, '')); break;
         case 'date': print(new Date().toString()); break;
         case 'exit': win.close(); break;
         default:
@@ -1057,6 +1057,10 @@ Apps.register({
       if (/achievement|trophy|gamerscore/.test(l)) { Apps.launch('xbox'); return 'You\'ve earned ' + Achievements.score() + ' G so far. Here\'s the full list. 🏆'; }
       if (/screensaver|screen saver/.test(l)) { setTimeout(() => Screensaver.start(), 600); return 'Starting the screensaver. Move the mouse to come back. 🫧'; }
       if (/lock (the )?(pc|screen|computer)|^lock$/.test(l)) { setTimeout(() => Lock.show(), 400); return 'Locking. See you soon! 🔒'; }
+      if (/task view|virtual desktop|new desktop/.test(l)) { TaskView.open(); return 'Here\'s Task View. Win+Tab gets you here too. 🗔'; }
+      if (/emoji/.test(l)) { setTimeout(() => EmojiPicker.toggle(), 300); return 'Win+. opens the emoji panel anywhere. Here you go. 😎'; }
+      if (/\bcat\b|neko|kitty/.test(l)) { if (!Apps.isInstalled('neko')) return 'Install Neko from the Microsoft Store and I\'ll let the cat out. 🐈'; Settings.set('neko', !Settings.get('neko')); return Settings.get('neko') ? 'Neko is loose! Move your mouse. 🐈' : 'Neko is back in her box. 📦'; }
+      if (/widget/.test(l)) { Widgets.toggle(); return 'Widgets, coming right up. 📰'; }
       if (/task manager|processes|not responding/.test(l)) { Apps.launch('taskmgr'); return 'Here\'s Task Manager. Please don\'t end me. 📊'; }
       if (/shortcut|hotkey|keyboard/.test(l)) return 'Hotkeys: Alt+Tab switches windows, Ctrl+Shift+Esc opens Task Manager, Ctrl+Esc opens Start, Win+D shows the desktop, Win+E opens Explorer. And there\'s a certain code from 1986…';
       if (/weather/.test(l)) {
@@ -1097,6 +1101,8 @@ Apps.register({
       personalization: { icon: '🎨', name: 'Personalization' },
       system: { icon: '🖥️', name: 'System' },
       apps: { icon: '📦', name: 'Apps' },
+      accounts: { icon: '👤', name: 'Accounts' },
+      accessibility: { icon: '♿', name: 'Accessibility' },
       fun: { icon: '🎉', name: 'Fun' },
       about: { icon: 'ℹ️', name: 'About' }
     };
@@ -1146,7 +1152,7 @@ Apps.register({
             localStorage.removeItem('win11.settings');
             localStorage.removeItem('win11.chat');
             localStorage.removeItem('win11.apps');
-            ['win11.achievements', 'win11.stats', 'win11.hiscores', 'win11.todo', 'win11.sticky', 'win11.snake.hi', 'win11.welcomed'].forEach(k => localStorage.removeItem(k));
+            ['win11.achievements', 'win11.stats', 'win11.hiscores', 'win11.todo', 'win11.sticky', 'win11.snake.hi', 'win11.welcomed', 'win11.emoji.recent'].forEach(k => localStorage.removeItem(k));
             location.reload();
           }
         });
@@ -1160,6 +1166,24 @@ Apps.register({
           Shell.toast('Settings', Apps.get(b.dataset.un).name + ' was uninstalled.', '📦');
           renderContent();
         }));
+      } else if (sel === 'accounts') {
+        const name = Settings.get('userName') || 'Seefood', av = Settings.get('avatar') || '';
+        content.innerHTML = `
+          <h1>Accounts</h1>
+          <div class="set-card"><div class="start-avatar" style="width:56px;height:56px;font-size:${av ? 30 : 24}px">${av || Utils.esc(name[0].toUpperCase())}</div><div class="set-info"><div class="set-t">${Utils.esc(name)}</div><div class="set-s">Local account • DESKTOP-WEB</div></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Your name</div><div class="set-s">Shown in the Start menu and on achievements</div></div><input class="fluent-input" id="acc-name" maxlength="24" value="${Utils.esc(name)}"></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Avatar</div><div class="set-s">Pick an emoji, or the first letter of your name</div></div></div>
+          <div class="accent-row">${Accounts.AVATARS.map(a => `<div class="acc-opt av-opt ${av === a ? 'sel' : ''}" data-av="${a}">${a || Utils.esc(name[0].toUpperCase())}</div>`).join('')}</div>`;
+        content.querySelector('#acc-name').addEventListener('change', e => { const v = e.target.value.trim(); if (v) { Settings.set('userName', v); renderContent(); } });
+        content.querySelectorAll('.av-opt').forEach(a => a.addEventListener('click', () => { Settings.set('avatar', a.dataset.av); renderContent(); }));
+      } else if (sel === 'accessibility') {
+        content.innerHTML = `
+          <h1>Accessibility</h1>
+          <div class="set-card"><div class="set-info"><div class="set-t">Narrator</div><div class="set-s">Reads notifications and Clippy's tips aloud${'speechSynthesis' in window ? '' : ' (not supported in this browser)'}</div></div><div class="switch ${Settings.get('narrator') ? 'on' : ''}" data-k="narrator"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Mouse pointer trails</div><div class="set-s">The 1998 experience, in rainbow</div></div><div class="switch ${Settings.get('cursorTrail') ? 'on' : ''}" data-k="cursorTrail"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Emoji panel</div><div class="set-s">Press Win+. (or Win+;) in any text field</div></div><button class="fluent-btn subtle" id="emoji-try">Open</button></div>`;
+        content.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => { Settings.set(s.dataset.k, !Settings.get(s.dataset.k)); renderContent(); }));
+        content.querySelector('#emoji-try').addEventListener('click', () => setTimeout(() => EmojiPicker.toggle(), 50));
       } else if (sel === 'fun') {
         const ss = Settings.get('screensaver'), mins = +Settings.get('screensaverMin') || 0;
         content.innerHTML = `

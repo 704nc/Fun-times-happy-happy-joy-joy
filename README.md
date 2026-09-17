@@ -35,6 +35,17 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 - **Power menu** — the Start power button now offers Lock (real lock screen), Sleep (screensaver), Restart and Shut down ("It's now safe to turn off your computer").
 - **Konami code** — ↑↑↓↓←→←→BA on the desktop. Confetti, rainbow accent, chiptune fanfare.
 - **BSOD** — `bsod` in Terminal, or ask Copilot to crash. Percent counter, fake QR code, then a "reboot".
+- **Solitaire** — Klondike in the Store. Click or drag, double-click to auto-foundation, undo, and the bouncing-cards win animation.
+- **Virtual desktops + Task View** — taskbar button or Win+Tab. Create desktops, move windows between them (right-click a thumbnail), Ctrl+Win+←/→ to switch.
+- **Snap Layouts** — hover the maximize button for halves, thirds and quadrants.
+- **Notification center** — click the clock. Every toast lands there; clear one or all.
+- **Widgets panel** — the weather button. Clock, forecast, To Do, "MSN-ish" headlines that change hourly, a Memories photo, Xbox and system cards.
+- **Windows Spotlight** — a procedurally painted wallpaper that's different every day. Settings → Personalization.
+- **Emoji panel** — Win+. in any text field (Notepad, Word, Slack…). Remembers your recent picks.
+- **Camera** — real webcam viewfinder with filters; photos save to Pictures › Camera Roll and show up in Photos and the Widgets panel.
+- **Neko** — a desktop cat from the Store that chases your mouse and naps when you stop. Pet her.
+- **Accounts & Accessibility** — rename yourself, pick an emoji avatar, turn on Narrator (reads toasts and Clippy aloud) or rainbow mouse trails.
+- **Matrix** screensaver, minimize/restore animations, and Task Manager knows about all of it.
 - **Terminal extras** — `cowsay`, `fortune`, `neofetch`, `sl`, `clippy`, `screensaver [style]`, `party`, `achievements`, `hiscores`, `taskmgr`, `lock`.
 
 **Built-in apps — all functional:**
@@ -56,7 +67,7 @@ Works in any modern Chromium/Firefox/Safari browser. Everything is client-side; 
 
 ## Performance notes
 
-- Zero dependencies, ~160 KB of unminified source total; wallpapers and sample photos are inline SVG, so there are no image downloads.
+- Zero dependencies, ~200 KB of unminified source total; wallpapers and sample photos are inline SVG, so there are no image downloads.
 - Windows are plain DOM nodes; only visible UI is rendered, timers are per-open-window and cleaned up on close.
 - Music is scheduled through a single shared WebAudio context with a lookahead scheduler — no audio files to fetch.
 
