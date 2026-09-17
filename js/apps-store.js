@@ -307,21 +307,6 @@ Apps.register({
   }
 });
 
-/* Sticky Notes */
-Apps.register({
-  id: 'stickynotes', name: 'Sticky Notes', icon: '🗒️', color: 'linear-gradient(135deg,#ffe259,#ffa751)',
-  category: 'Productivity', store: true, width: 320, height: 340,
-  desc: 'A little yellow square of memory. Auto-saves as you type.', rating: 4.5, size: '0.3 MB',
-  mount(win) {
-    win.body.innerHTML = `<textarea class="sticky-note-area" placeholder="Take a note…" spellcheck="false"></textarea>`;
-    const area = win.body.querySelector('textarea');
-    area.value = localStorage.getItem('win11.sticky') || '';
-    area.addEventListener('input', () => {
-      try { localStorage.setItem('win11.sticky', area.value); } catch (e) {}
-    });
-  }
-});
-
 /* Weather */
 Apps.register({
   id: 'weather', name: 'MSN Weather', icon: '🌤️', color: 'linear-gradient(135deg,#4facfe,#00c6fb)',

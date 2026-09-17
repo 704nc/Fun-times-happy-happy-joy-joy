@@ -38,7 +38,7 @@ const Nearby = {
         this.inbox.unshift(Object.assign({ t: Date.now(), read: false }, m));
         Bus.emit('nearby:inbox');
         Shell.toast('Nearby Share', (m.name || 'Someone') + ' sent ' + (m.kind === 'file' ? m.fileName : 'a message') + '. Open Nearby Share to accept.', '📡');
-      }
+      } else if (!m.to || m.to === this.id) Bus.emit('nearby:msg', m);
     };
     this.send({ type: 'hello' });
     window.addEventListener('beforeunload', () => this.send({ type: 'bye' }));

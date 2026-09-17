@@ -35,14 +35,15 @@ const Weather = {
     if (!force && this._cache && this._cache.key === key && Date.now() - this._cache.t < 30 * 60000) return this._cache.data;
     if (!navigator.onLine) return this._cache && this._cache.data || this.fake();
     try {
-      const u = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,apparent_temperature&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=${this.unit() === 'C' ? 'celsius' : 'fahrenheit'}&wind_speed_unit=mph&timezone=auto&forecast_days=7`;
+      const u = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,apparent_temperature&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&temperature_unit=${this.unit() === 'C' ? 'celsius' : 'fahrenheit'}&wind_speed_unit=mph&timezone=auto&forecast_days=7`;
       const r = await fetch(u, { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const j = await r.json();
       const data = {
         fake: false, loc: loc.name,
         now: { temp: j.current.temperature_2m, feels: j.current.apparent_temperature, code: j.current.weather_code, wind: j.current.wind_speed_10m, humidity: j.current.relative_humidity_2m },
-        days: j.daily.time.map((d, i) => ({ date: new Date(d + 'T12:00:00'), code: j.daily.weather_code[i], hi: j.daily.temperature_2m_max[i], lo: j.daily.temperature_2m_min[i] }))
+        days: j.daily.time.map((d, i) => ({ date: new Date(d + 'T12:00:00'), code: j.daily.weather_code[i], hi: j.daily.temperature_2m_max[i], lo: j.daily.temperature_2m_min[i] })),
+        sun: j.daily.sunrise ? { rise: j.daily.sunrise[0], set: j.daily.sunset[0] } : null
       };
       this._cache = { key, t: Date.now(), data };
       Store.set('win11.weather.cache', this._cache);
@@ -191,8 +192,8 @@ Apps.register({
   desc: 'Chess Titans, but humble. Full rules — castling, en passant, promotion — against an alpha-beta engine with three difficulty levels. It will occasionally blunder. So will you.', rating: 4.7, size: '1.6 MB',
   mount(win) {
     const GLYPH = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
-    let s, side = 'w', depth = 2, sel = null, legalFrom = [], thinking = false, over = false, undoStack = [];
-    win.body.innerHTML = `<div class="chess-root"><div class="app-toolbar"><button class="fluent-btn subtle ch-new">New game</button><select class="fluent-input ch-side"><option value="w">Play White</option><option value="b">Play Black</option></select><select class="fluent-input ch-depth"><option value="1">Easy</option><option value="2" selected>Normal</option><option value="3">Hard</option></select><button class="fluent-btn subtle ch-undo">↶ Undo</button><span class="ch-status" style="margin-left:auto;font-weight:600"></span></div><div class="chess-wrap"><div class="chess-board"></div><div class="chess-moves"></div></div></div>`;
+    let s, side = 'w', depth = 2, sel = null, legalFrom = [], thinking = false, over = false, undoStack = [], net = null;
+    win.body.innerHTML = `<div class="chess-root"><div class="app-toolbar"><button class="fluent-btn subtle ch-new">New game</button><select class="fluent-input ch-side"><option value="w">Play White</option><option value="b">Play Black</option></select><select class="fluent-input ch-depth"><option value="1">Easy</option><option value="2" selected>Normal</option><option value="3">Hard</option></select><button class="fluent-btn subtle ch-undo">↶ Undo</button><button class="fluent-btn subtle ch-net" title="Play against another open tab of this site">📡 Play nearby</button><span class="ch-status" style="margin-left:auto;font-weight:600"></span></div><div class="chess-wrap"><div class="chess-board"></div><div class="chess-moves"></div></div></div>`;
     const board = win.body.querySelector('.chess-board'), status = win.body.querySelector('.ch-status'), movesEl = win.body.querySelector('.chess-moves');
     const sq = i => 'abcdefgh'[i & 7] + (8 - (i >> 3));
     function render() {
@@ -208,8 +209,8 @@ Apps.register({
       const st = ChessEngine.status(s);
       const turnName = s.turn === 'w' ? 'White' : 'Black';
       over = st === 'mate' || st === 'stalemate' || st === 'draw';
-      status.textContent = thinking ? 'Thinking…' : st === 'mate' ? `Checkmate — ${s.turn === 'w' ? 'Black' : 'White'} wins` : st === 'stalemate' ? 'Stalemate' : st === 'draw' ? 'Draw (50-move rule)' : st === 'check' ? `${turnName} to move — check!` : `${turnName} to move`;
-      if (st === 'mate' && s.turn !== side && !s._scored) { s._scored = true; Achievements.unlock('chess'); HiScore.submit('chess', Math.max(1, 1000 - s.moves.length * 5) * depth); Shell.toast('Chess', 'Checkmate! You beat the computer on ' + ['', 'Easy', 'Normal', 'Hard'][depth] + '.', '♛'); Party.confetti(3); }
+      status.textContent = net && !over && s.turn !== side ? 'Waiting for ' + (net.peerName || 'opponent') + '…' : thinking ? 'Thinking…' : st === 'mate' ? `Checkmate — ${s.turn === 'w' ? 'Black' : 'White'} wins` : st === 'stalemate' ? 'Stalemate' : st === 'draw' ? 'Draw (50-move rule)' : st === 'check' ? `${turnName} to move — check!` : `${turnName} to move`;
+      if (st === 'mate' && s.turn !== side && !s._scored) { s._scored = true; if (net) Achievements.unlock('chess-net'); else Achievements.unlock('chess'); HiScore.submit('chess', Math.max(1, 1000 - s.moves.length * 5) * depth); Shell.toast('Chess', 'Checkmate! You beat the computer on ' + ['', 'Easy', 'Normal', 'Hard'][depth] + '.', '♛'); Party.confetti(3); }
       if (st === 'mate' && s.turn === side && !s._scored) { s._scored = true; blip(40, 0.4); }
       const pairs = [];
       s.moves.forEach((m, i) => { const t = (m.castle === 'K' ? 'O-O' : m.castle === 'Q' ? 'O-O-O' : (m.piece.toLowerCase() !== 'p' ? m.piece.toUpperCase() : '') + (m.cap ? (m.piece.toLowerCase() === 'p' ? sq(m.from)[0] : '') + 'x' : '') + sq(m.to) + (m.promo ? '=' + m.promo.toUpperCase() : '')); if (i % 2 === 0) pairs.push([t]); else pairs[pairs.length - 1].push(t); });
@@ -217,7 +218,7 @@ Apps.register({
       movesEl.scrollTop = movesEl.scrollHeight;
     }
     function aiMove() {
-      if (over || s.turn === side) return;
+      if (net || over || s.turn === side) return;
       thinking = true; render();
       setTimeout(() => {
         const m = ChessEngine.bestMove(s, depth);
@@ -235,7 +236,7 @@ Apps.register({
       const el = e.target.closest('.sq'); if (!el || thinking || over || s.turn !== side) return;
       const i = +el.dataset.i;
       const mv = legalFrom.find(m => m.to === i && (!m.promo || m.promo.toLowerCase() === 'q'));
-      if (mv) { undoStack.push(s); s = ChessEngine.make(s, mv); sel = null; legalFrom = []; blip(mv.cap ? 62 : 72, 0.05); render(); aiMove(); return; }
+      if (mv) { undoStack.push(s); s = ChessEngine.make(s, mv); sel = null; legalFrom = []; blip(mv.cap ? 62 : 72, 0.05); render(); if (net) Nearby.send({ type: 'chess-move', to: net.peer, game: net.id, m: { from: mv.from, to: mv.to, promo: mv.promo || null } }); aiMove(); return; }
       const p = s.b[i];
       if (p && ChessEngine.isW(p) === (side === 'w')) { sel = i; legalFrom = ChessEngine.legal(s).filter(m => m.from === i); }
       else { sel = null; legalFrom = []; }
@@ -244,7 +245,24 @@ Apps.register({
     win.body.querySelector('.ch-new').addEventListener('click', reset);
     win.body.querySelector('.ch-side').addEventListener('change', e => { side = e.target.value; reset(); });
     win.body.querySelector('.ch-depth').addEventListener('change', e => { depth = +e.target.value; });
-    win.body.querySelector('.ch-undo').addEventListener('click', () => { if (undoStack.length && !thinking) { s = undoStack.pop(); sel = null; legalFrom = []; over = false; render(); } });
+    win.body.querySelector('.ch-undo').addEventListener('click', () => { if (net) { Shell.toast('Chess', 'No take-backs in a real match.', '♟️'); return; } if (undoStack.length && !thinking) { s = undoStack.pop(); sel = null; legalFrom = []; over = false; render(); } });
+    win._chessNet = cfg => { net = cfg; side = cfg.side; win.body.querySelector('.ch-side').value = side; s = ChessEngine.initial(); sel = null; legalFrom = []; undoStack = []; over = false; thinking = false; win.setTitle('Chess — vs ' + (cfg.peerName || 'nearby')); render(); };
+    win.body.querySelector('.ch-net').addEventListener('click', () => {
+      if (typeof Nearby === 'undefined') return;
+      const peers = Object.keys(Nearby.peers);
+      if (!peers.length) { Shell.toast('Chess', 'No other tab is open. Open this site in a second tab, then try again.', '📡'); return; }
+      const peer = peers[0], id = 'g' + Date.now();
+      win._chessNet({ id, side: 'w', peer, peerName: Nearby.peers[peer].name });
+      Nearby.send({ type: 'chess-invite', to: peer, game: id });
+      Shell.toast('Chess', 'Invite sent to ' + Nearby.peers[peer].name + '. You play White.', '📡');
+    });
+    win.on('nearby:msg', m => {
+      if (!net || m.game !== net.id) return;
+      if (m.type === 'chess-move' && s.turn !== side) { const mv = ChessEngine.legal(s).find(x => x.from === m.m.from && x.to === m.m.to && ((x.promo || null) === m.m.promo)); if (mv) { s = ChessEngine.make(s, mv); blip(mv.cap ? 60 : 68, 0.05); render(); } }
+      else if (m.type === 'chess-accept') { net.peerName = m.name; render(); Shell.toast('Chess', m.name + ' accepted. Your move.', '♟️'); }
+      else if (m.type === 'chess-resign') { over = true; status.textContent = (m.name || 'Opponent') + ' resigned — you win'; Achievements.unlock('chess-net'); }
+    });
+    win.onClose(() => { if (net) Nearby.send({ type: 'chess-resign', to: net.peer, game: net.id }); });
     reset();
   }
 });

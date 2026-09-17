@@ -24,7 +24,7 @@ Apps.register({
   category: 'System', width: 900, height: 580,
   mount(win, args) {
     let cwd = args.path || HOME;
-    let history = [cwd], hIdx = 0, selected = null, view = Store.get('win11.fx.view', 'grid'), sortBy = 'name', filter = '';
+    let history = [cwd], hIdx = 0, selected = null, view = Store.get('win11.fx.view', 'grid'), sortBy = 'name', filter = '', preview = Store.get('win11.fx.preview', false);
     const sizeOf = n => n.type === 'folder' ? Object.keys(n.children).length : String(n.content || '').length;
     win.body.innerHTML = `
       <div class="fx-root">
@@ -39,10 +39,12 @@ Apps.register({
           <select class="fx-sort" title="Sort"><option value="name">Name</option><option value="type">Type</option><option value="size">Size</option></select>
           <button class="fx-view" title="Toggle list / grid view">☰</button>
           <input class="fx-search" placeholder="Search this folder" spellcheck="false">
+          <button class="fx-preview-btn" title="Preview pane (Space)">👁</button>
         </div>
         <div class="fx-main">
           <div class="fx-side"></div>
           <div class="fx-files" tabindex="0"></div>
+          <div class="fx-preview" style="display:none"></div>
         </div>
         <div class="fx-status"></div>
       </div>`;
@@ -86,6 +88,7 @@ Apps.register({
         `<div class="fx-item" data-n="${Utils.esc(it.name)}"><div class="fx-ico">${fileIcon(it.name, it.node)}</div><div class="fx-name">${Utils.esc(it.name)}</div>${view === 'list' ? `<div class="fx-meta">${it.node.type === 'folder' ? 'File folder' : (it.name.split('.').pop() || '').toUpperCase() + ' file'}</div><div class="fx-meta">${it.node.type === 'folder' ? sizeOf(it.node) + ' items' : Utils.fmtBytes(sizeOf(it.node))}</div>` : ''}</div>`
       ).join('') || '<div style="grid-column:1/-1;text-align:center;color:var(--text-2);padding:40px">' + (filter ? 'No items match your search.' : 'This folder is empty.') + '</div>';
       $('.fx-status').textContent = items.length + ' item' + (items.length === 1 ? '' : 's') + (selected ? ' • ' + selected + ' selected' : '');
+      renderPreview();
     }
     $('.fx-breadcrumb').addEventListener('click', e => {
       const c = e.target.closest('.fx-crumb');
@@ -126,6 +129,29 @@ Apps.register({
     $('.fx-sort').addEventListener('change', e => { sortBy = e.target.value; render(); });
     $('.fx-view').addEventListener('click', () => { view = view === 'list' ? 'grid' : 'list'; Store.set('win11.fx.view', view); render(); });
     $('.fx-search').addEventListener('input', e => { filter = e.target.value.trim().toLowerCase(); render(); });
+    function renderPreview() {
+      const pane = $('.fx-preview');
+      pane.style.display = preview ? '' : 'none';
+      $('.fx-preview-btn').classList.toggle('on', preview);
+      if (!preview) return;
+      if (!selected) { pane.innerHTML = '<div class="fx-pv-empty">Select a file to preview it</div>'; return; }
+      const p = cwd + '/' + selected, n = FS.get(p);
+      if (!n) { pane.innerHTML = ''; return; }
+      const name = Utils.esc(selected), c = String(n.content || '');
+      let body;
+      if (n.type === 'folder') body = `<div class="fx-pv-big">📁</div><div class="fx-pv-meta">${Object.keys(n.children).length} items</div>`;
+      else if (/\.(png|jpe?g|gif|svg|webp|bmp)$/i.test(selected)) body = `<img src="${c}" alt="">`;
+      else if (/\.(mp4|webm|mov)$/i.test(selected)) body = `<video src="${c}" controls playsinline></video>`;
+      else if (/\.(mp3|wav|ogg|m4a)$/i.test(selected)) body = `<div class="fx-pv-big">🎵</div><audio src="${c}" controls></audio>`;
+      else if (/\.docx?$/i.test(selected)) body = `<div class="fx-pv-doc">${c}</div>`;
+      else if (/\.xlsx?$/i.test(selected)) { let cells = {}; try { cells = JSON.parse(c).cells || {}; } catch (e) {} const rows = {}; Object.entries(cells).forEach(([k, v]) => { const m = k.match(/^([A-Z])(\d+)$/); if (m && +m[2] <= 8) (rows[m[2]] = rows[m[2]] || {})[m[1]] = v; }); body = `<table class="fx-pv-tbl">${Object.keys(rows).sort((a, b) => a - b).map(r => `<tr>${['A', 'B', 'C', 'D', 'E'].map(col => `<td>${Utils.esc(String(rows[r][col] || ''))}</td>`).join('')}</tr>`).join('')}</table>`; }
+      else if (/\.pptx?$/i.test(selected)) { let sl = []; try { sl = JSON.parse(c).slides || []; } catch (e) {} body = sl.slice(0, 4).map((s, i) => `<div class="fx-pv-slide"><b>${i + 1}. ${Utils.esc(s.title)}</b><div>${Utils.esc(s.body).slice(0, 80)}</div></div>`).join('') + (sl.length > 4 ? `<div class="fx-pv-meta">+${sl.length - 4} more slides</div>` : ''); }
+      else if (/^data:/.test(c)) body = `<div class="fx-pv-big">${fileIcon(selected, n)}</div><div class="fx-pv-meta">Binary file</div>`;
+      else body = `<pre>${Utils.esc(c.slice(0, 3000))}${c.length > 3000 ? '\n…' : ''}</pre>`;
+      pane.innerHTML = `<div class="fx-pv-name">${name}</div>${body}<div class="fx-pv-meta">${n.type === 'folder' ? 'Folder' : (n.mime || 'text/plain') + ' • ' + Utils.fmtBytes(c.length)}</div>`;
+    }
+    $('.fx-preview-btn').addEventListener('click', () => { preview = !preview; Store.set('win11.fx.preview', preview); renderPreview(); });
+    files.addEventListener('keydown', e => { if (e.key === ' ' && !e.target.matches('input')) { e.preventDefault(); preview = !preview; Store.set('win11.fx.preview', preview); renderPreview(); } });
     function properties(name) {
       const p = cwd + '/' + name, n = FS.get(p); if (!n) return;
       const dlg = Utils.el('div', 'fx-props');
@@ -174,6 +200,7 @@ Apps.register({
       files.focus();
       files.querySelectorAll('.fx-item').forEach(x => x.classList.remove('sel'));
       selected = it ? it.dataset.n : null;
+      renderPreview();
       if (it) {
         it.classList.add('sel');
         if (TOUCH && !inBin()) openFile(cwd + '/' + it.dataset.n);
@@ -905,6 +932,8 @@ Apps.register({
       if (picsRoot) walk(HOME + '/Pictures', picsRoot);
       return out;
     }
+    let album = args.path ? args.path.split('/').slice(0, -1).join('/') : '';
+    if (album && !album.startsWith(HOME + '/Pictures/')) album = '';
     let viewing = args.path ? allImages().findIndex(i => i.path === args.path) : -1;
     if (args.path && viewing < 0) {
       const n = FS.get(args.path);
@@ -971,18 +1000,21 @@ Apps.register({
         win.body.querySelector('.pv-del').addEventListener('click', () => { if (confirm('Move "' + img.name + '" to the Recycle Bin?')) { FS.recycle(img.path); viewing = -1; render(); } });
       } else {
         win.setTitle('Photos');
+        const albums = FS.list(HOME + '/Pictures').filter(f => f.node.type === 'folder').map(f => f.name);
+        const shown = allImages().map((img, i) => ({ img, i })).filter(x => !album || x.img.path.startsWith(album + '/'));
         win.body.innerHTML = `
           <div class="app-toolbar">
-            <span style="font-weight:600">All photos</span>
+            <div class="ph-albums"><button class="${album ? '' : 'sel'}" data-album="">All photos</button>${albums.map(a => `<button class="${album === HOME + '/Pictures/' + a ? 'sel' : ''}" data-album="${Utils.esc(HOME + '/Pictures/' + a)}">${Utils.esc(a)}</button>`).join('')}</div>
             <label class="tool-btn" style="margin-left:auto">⬆️ Import image<input type="file" accept="image/*" style="display:none"></label>
           </div>
-          <div class="photos-grid">${allImages().map((img, i) =>
+          <div class="photos-grid">${shown.map(({ img, i }) =>
             `<div class="ph-thumb" data-i="${i}"><img loading="lazy" src="${img.src}"><div class="ph-name">${Utils.esc(img.name)}</div></div>`).join('')
             || '<div class="placeholder-pane"><div class="ph-ico">🏞️</div>No photos yet. Import one!</div>'}</div>`;
         win.body.querySelector('.photos-grid').addEventListener('click', e => {
           const t = e.target.closest('.ph-thumb');
           if (t) { viewing = +t.dataset.i; render(); }
         });
+        win.body.querySelector('.ph-albums').addEventListener('click', e => { const b = e.target.closest('[data-album]'); if (b) { album = b.dataset.album; render(); } });
         win.body.querySelector('input[type=file]').addEventListener('change', e => {
           const f = e.target.files[0];
           if (!f) return;
@@ -1440,9 +1472,12 @@ Apps.register({
       about: { icon: 'ℹ️', name: 'About' }
     };
     let sel = (args && args.section) || 'personalization';
-    win.body.innerHTML = `<div class="set-root"><div class="set-side"></div><div class="set-content"></div></div>`;
-    const side = win.body.querySelector('.set-side');
+    win.body.innerHTML = `<div class="set-root"><div class="set-side"><input class="set-search fluent-input" placeholder="Find a setting" spellcheck="false"><div class="set-nav-list"></div><div class="set-results"></div></div><div class="set-content"></div></div>`;
+    const side = win.body.querySelector('.set-nav-list');
     const content = win.body.querySelector('.set-content');
+    const INDEX = [['Wallpaper / background', 'personalization'], ['Dark mode', 'personalization'], ['Accent color', 'personalization'], ['Taskbar alignment', 'personalization'], ['Visual style (XP, 95)', 'personalization'], ['Wallpaper slideshow', 'personalization'], ['Auto dark mode at sunset', 'personalization'], ['Storage', 'system'], ['Display', 'system'], ['System sounds', 'system'], ['Edge web proxy', 'system'], ['Reset this PC', 'system'], ['Installed apps / uninstall', 'apps'], ['Your name', 'accounts'], ['Avatar', 'accounts'], ['Narrator', 'accessibility'], ['Mouse pointer trails', 'accessibility'], ['Text size', 'accessibility'], ['High contrast', 'accessibility'], ['Emoji panel', 'accessibility'], ['Clippy / Office Assistant', 'fun'], ['Screensaver', 'fun'], ['Achievements', 'fun'], ['Party mode', 'fun'], ['Keyboard shortcuts', 'fun'], ['Xbox Game Bar', 'gaming'], ['FPS counter', 'gaming'], ['Game Mode', 'gaming'], ['High scores', 'gaming'], ['Check for updates', 'update'], ['Update history', 'update'], ['About / version', 'about'], ['Install as an app', 'about'], ['Credits', 'about']];
+    win.body.querySelector('.set-search').addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); const res = win.body.querySelector('.set-results'); if (!q) { res.innerHTML = ''; side.style.display = ''; return; } side.style.display = 'none'; const hits = INDEX.filter(([n, s]) => (n + ' ' + sections[s].name).toLowerCase().includes(q)); res.innerHTML = hits.map(([n, s]) => `<div class="set-nav" data-id="${s}"><span>${sections[s].icon}</span><span>${Utils.esc(n)}<br><small style="color:var(--text-2)">${sections[s].name}</small></span></div>`).join('') || '<div class="wg-sub" style="padding:8px">No matching settings.</div>'; });
+    win.body.querySelector('.set-results').addEventListener('click', e => { const n = e.target.closest('.set-nav'); if (n) { sel = n.dataset.id; renderSide(); renderContent(); } });
     function renderSide() {
       side.innerHTML = Object.entries(sections).map(([id, s]) =>
         `<div class="set-nav ${sel === id ? 'sel' : ''}" data-id="${id}"><span>${s.icon}</span><span>${s.name}</span></div>`).join('');
@@ -1465,6 +1500,7 @@ Apps.register({
           <div class="set-card"><div class="set-info"><div class="set-t">Visual style</div><div class="set-s">Windows 11, or a trip down memory lane</div></div>
             <select class="fluent-input" data-k="retro"><option value="" ${!Settings.get('retro') ? 'selected' : ''}>Windows 11</option><option value="xp" ${Settings.get('retro') === 'xp' ? 'selected' : ''}>Windows XP (Luna)</option><option value="95" ${Settings.get('retro') === '95' ? 'selected' : ''}>Windows 95 (Classic)</option></select></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Dark mode</div><div class="set-s">Switch between light and dark theme</div></div><div class="switch ${Settings.get('theme') === 'dark' ? 'on' : ''}" data-k="theme"></div></div>
+          <div class="set-card"><div class="set-info"><div class="set-t">Auto dark mode</div><div class="set-s">Light by day, dark after sunset (uses the weather's sunrise/sunset when available)</div></div><div class="switch ${Settings.get('autoTheme') ? 'on' : ''}" data-k="autoTheme"></div></div>
           <div class="set-card"><div class="set-info"><div class="set-t">Accent color</div><div class="set-s">Used across buttons and highlights</div></div></div>
           <div class="accent-row">${accents.map(a => `<div class="acc-opt ${Settings.get('accent') === a ? 'sel' : ''}" data-a="${a}" style="background:${a}"></div>`).join('')}</div>
           <div style="height:14px"></div>
@@ -1472,7 +1508,8 @@ Apps.register({
             <select class="fluent-input" data-k="taskbarAlign"><option value="center" ${Settings.get('taskbarAlign') === 'center' ? 'selected' : ''}>Center</option><option value="left" ${Settings.get('taskbarAlign') === 'left' ? 'selected' : ''}>Left</option></select></div>`;
         content.querySelectorAll('.wall-opt').forEach(w => w.addEventListener('click', () => { Settings.set('wallpaper', w.dataset.w); renderContent(); }));
         content.querySelectorAll('.acc-opt').forEach(a => a.addEventListener('click', () => { Settings.set('accent', a.dataset.a); renderContent(); }));
-        content.querySelector('.switch').addEventListener('click', () => { Settings.set('theme', Settings.get('theme') === 'dark' ? 'light' : 'dark'); renderContent(); });
+        content.querySelector('.switch[data-k=theme]').addEventListener('click', () => { Settings.set('theme', Settings.get('theme') === 'dark' ? 'light' : 'dark'); renderContent(); });
+        content.querySelector('.switch[data-k=autoTheme]').addEventListener('click', () => { Settings.set('autoTheme', !Settings.get('autoTheme')); renderContent(); });
         content.querySelector('select[data-k=taskbarAlign]').addEventListener('change', e => Settings.set('taskbarAlign', e.target.value));
         content.querySelector('select[data-k=retro]').addEventListener('change', e => { Retro.set(e.target.value); renderContent(); });
         content.querySelector('select[data-k=wallpaperSlide]').addEventListener('change', e => Settings.set('wallpaperSlide', +e.target.value));
